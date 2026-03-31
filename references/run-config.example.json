@@ -1,0 +1,28 @@
+{
+  "checks": [
+    {
+      "query": "ssd 2tb",
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "max_results": 20,
+      "alert_limit": 20
+    },
+    {
+      "query": "ssd 2tb",
+      "marketplaces": ["shopee_br"],
+      "session_id": "replace-with-steel-session-id",
+      "max_results": 20,
+      "alert_limit": 20
+    }
+  ],
+  "zoom_enrichments": [
+    {
+      "product_id": 10,
+      "auto_match": true,
+      "threshold": 0.6
+    },
+    {
+      "product_id": 10,
+      "zoom_url": "https://www.zoom.com.br/hd/ssd-nvme-samsung-990-pro-1tb-m-2-pcie-4-0-com-dissipador-de-calor?_lc=88&searchterm=ssd%202tb"
+    }
+  ]
+}
