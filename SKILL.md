@@ -220,8 +220,12 @@ Para atualizacoes:
 
 ## Guardrails
 
-- O Steel deve estar rodando em `http://localhost:3000`.
-- Trate a Shopee como opcionalmente autenticada; use `scripts/create_shopee_session.py` quando login for necessario.
+- O servidor de scraping (`scripts/scrape_server.py`) deve estar rodando em `http://localhost:3000`.
+  - Iniciar com: `python3 scripts/scrape_server.py --port 3000`
+  - Dependencias: `pip install fastapi uvicorn playwright && playwright install chromium`
+  - Usa Playwright com stealth para evitar detecção de bots.
+- Amazon BR e Mercado Livre funcionam sem autenticação.
+- Shopee BR pode retornar interstitial (proteção anti-bot). Login automático não é suportado atualmente.
 - Mantenha snapshots diretos dos marketplaces como fonte principal da verdade para alertas.
 - Trate o Zoom apenas como contexto externo.
 - Nao emita alertas duplicados; use o fingerprint de `alert_events`.
