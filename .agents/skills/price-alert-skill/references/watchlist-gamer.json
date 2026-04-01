@@ -1,0 +1,70 @@
+{
+  "watchlists": [
+    {
+      "name": "Mouse Gamer",
+      "categories": ["mouse gamer", "mouse sem fio gamer", "mouse rgb gamer"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "Teclado Gamer",
+      "categories": ["teclado mecanico gamer", "teclado gamer rgb", "teclado sem fio gamer"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "Headset Gamer",
+      "categories": ["headset gamer", "fone gamer", "headset sem fio gamer"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "Monitor Gamer",
+      "categories": ["monitor gamer", "monitor 144hz", "monitor 240hz gamer"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "SSD Gamer",
+      "categories": ["ssd 2tb", "ssd nvme", "ssd gamer"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "Memoria RAM Gamer",
+      "categories": ["memoria ram ddr5", "memoria ram gamer", "memoria ram 32gb"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "Placa de Video",
+      "categories": ["placa de video rtx", "rtx 4060", "rtx 4070"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "Notebook Gamer",
+      "categories": ["notebook gamer", "notebook rtx", "notebook gamer i7"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "Gabinete e Fonte Gamer",
+      "categories": ["gabinete gamer", "fonte gamer", "fonte 850w"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "Cooler e Water Cooler",
+      "categories": ["cooler gamer", "water cooler", "cooler processador"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    },
+    {
+      "name": "Perifericos Gamer",
+      "categories": ["cadeira gamer", "mousepad gamer", "webcam gamer", "controle gamer"],
+      "marketplaces": ["amazon_br", "mercadolivre_br"],
+      "update_interval_minutes": 5
+    }
+  ]
+}

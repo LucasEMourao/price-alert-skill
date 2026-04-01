@@ -326,21 +326,22 @@ WHERE product_id = ?
 
 ## Cronograma sugerido
 
-| Etapa | Descrição | Dependências | Status | Estimativa |
-|---|---|---|---|---|
-| 1 | Definir formato mensagem | Nenhuma | **Concluído** | — |
-| 2 | Configurar categoria/watchlist | Etapa 1 | **Definido** | 30 min |
-| 3 | Implementar agendamento | Etapa 2 | A fazer | 1 hora |
-| 4 | Lógica preço abaixo da média | Etapa 3 | A fazer | 1 hora |
-| 5 | Formatar mensagens WhatsApp | Etapa 1 | **Definido** | 30 min |
-| 6 | Integrar pipeline completo | Etapas 3-5 | A fazer | 1 hora |
-| 7 | Integração WhatsApp (opcional) | Etapa 6 | A fazer | 2+ horas |
+| Etapa | Descrição | Dependências | Status |
+|---|---|---|---|
+| 1 | Definir formato mensagem | Nenhuma | **Concluído** |
+| 2 | Configurar categoria/watchlist | Etapa 1 | **Concluído** |
+| 3 | Implementar agendamento | Etapa 2 | **Concluído** |
+| 4 | Lógica preço abaixo da média | Etapa 3 | **Concluído** |
+| 5 | Formatar mensagens WhatsApp | Etapa 1 | **Concluído** |
+| 6 | Integrar pipeline completo | Etapas 3-5 | **Concluído** |
+| 7 | Integração WhatsApp (opcional) | Etapa 6 | A fazer |
 
 ---
 
 ## Próximos passos imediatos
 
-1. **Etapa 2:** Criar watchlists para subcategorias gamer (mouse, teclado, headset, etc.)
-2. **Etapa 3:** Implementar `scheduler.py` para rodar a cada 5 minutos
-3. **Etapa 4:** Implementar lógica de detecção de preço abaixo da média
-4. **Etapa 5:** Adaptar `format_whatsapp_alerts.py` para o template definido
+1. ~~Etapa 2: Criar watchlists para subcategorias gamer~~ ✅
+2. ~~Etapa 3: Implementar scheduler.py para rodar a cada 5 minutos~~ ✅
+3. ~~Etapa 4: Implementar lógica de detecção de preço abaixo da média~~ ✅
+4. ~~Etapa 5: Adaptar format_deal_messages.py para o template definido~~ ✅
+5. **Etapa 7:** Integração com WhatsApp (automática ou manual)
