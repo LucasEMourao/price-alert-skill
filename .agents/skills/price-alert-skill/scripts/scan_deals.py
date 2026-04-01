@@ -1,0 +1,286 @@
+#!/usr/bin/env python3
+
+"""Scan marketplaces for products with displayed discounts and format WhatsApp messages.
+
+This script does NOT use SQLite or historical data. It relies solely on the
+discount information displayed by the marketplace itself (e.g., "de R$ 2.000 por R$ 1.500").
+The responsibility for the accuracy of the discount lies with the marketplace.
+
+Usage:
+  python3 scan_deals.py "mouse gamer" --min-discount 10
+  python3 scan_deals.py --all  # Scan all gamer categories
+"""
+
+import argparse
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from fetch_amazon_br import run as run_amazon
+from fetch_mercadolivre_br import run as run_mercadolivre
+
+ROOT = Path(__file__).resolve().parents[1]
+MESSAGES_DIR = ROOT / "data" / "messages"
+
+# Category emoji mapping
+CATEGORY_EMOJIS = {
+    "mouse": "🖱️",
+    "teclado": "⌨️",
+    "headset": "🎧",
+    "fone": "🎧",
+    "monitor": "🖥️",
+    "ssd": "💾",
+    "hd": "💾",
+    "nvme": "💾",
+    "memoria": "🧩",
+    "ram": "🧩",
+    "ddr": "🧩",
+    "placa": "🎮",
+    "rtx": "🎮",
+    "gpu": "🎮",
+    "notebook": "💻",
+    "laptop": "💻",
+    "gabinete": "🏠",
+    "fonte": "⚡",
+    "cooler": "❄️",
+    "water": "❄️",
+    "cadeira": "🪑",
+    "mousepad": "🎯",
+    "webcam": "📷",
+    "controle": "🎮",
+    "gamepad": "🎮",
+}
+
+DEFAULT_EMOJI = "🎮"
+
+GAMER_QUERIES = [
+    "mouse gamer",
+    "teclado mecanico gamer",
+    "headset gamer",
+    "monitor gamer",
+    "ssd 2tb",
+    "memoria ram ddr5",
+    "placa de video rtx",
+    "notebook gamer",
+    "gabinete gamer",
+    "fonte gamer",
+    "cooler gamer",
+    "mousepad gamer",
+]
+
+
+def detect_category_emoji(title: str, query: str) -> str:
+    """Detect product category and return matching emoji."""
+    combined = f"{title} {query}".lower()
+    for keyword, emoji in CATEGORY_EMOJIS.items():
+        if keyword in combined:
+            return emoji
+    return DEFAULT_EMOJI
+
+
+def format_price_brl(value: float) -> str:
+    """Format price as R$ XXXX.XX."""
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def calculate_discount(current_price: float, list_price: float) -> float | None:
+    """Calculate discount percentage if list_price is higher than current_price."""
+    if list_price and current_price and list_price > current_price:
+        return round(((list_price - current_price) / list_price) * 100, 1)
+    return None
+
+
+def extract_deals_from_products(
+    products: list[dict[str, Any]],
+    marketplace: str,
+    query: str,
+    min_discount: float,
+) -> list[dict[str, Any]]:
+    """Extract products that have a displayed discount >= min_discount."""
+    deals = []
+    for product in products:
+        current_price = product.get("price")
+        list_price = product.get("list_price")
+        title = product.get("title", "")
+        url = product.get("url", "")
+
+        if not current_price or not title or not url:
+            continue
+
+        # Try to get discount from marketplace display
+        discount_pct = None
+        previous_price = None
+
+        if list_price and list_price > current_price:
+            discount_pct = calculate_discount(current_price, list_price)
+            previous_price = list_price
+
+        if discount_pct is None or discount_pct < min_discount:
+            continue
+
+        deals.append({
+            "title": title,
+            "url": url,
+            "image_url": product.get("image_url"),
+            "marketplace": marketplace,
+            "current_price": current_price,
+            "current_price_text": product.get("price_text"),
+            "previous_price": previous_price,
+            "previous_price_text": product.get("list_price_text"),
+            "discount_pct": discount_pct,
+            "query": query,
+        })
+
+    return deals
+
+
+def format_deal_message(deal: dict[str, Any]) -> str:
+    """Format a single deal as WhatsApp message."""
+    title = deal["title"]
+    current_price = deal["current_price"]
+    url = deal["url"]
+    discount_pct = deal["discount_pct"]
+    previous_price = deal.get("previous_price")
+    query = deal.get("query", "")
+
+    emoji = detect_category_emoji(title, query)
+
+    if len(title) > 120:
+        title = title[:117] + "..."
+
+    price_today = format_price_brl(current_price)
+
+    lines = [
+        f"{emoji} OFERTA DO DIA 👇",
+        "",
+        f"{emoji} {title}",
+        "",
+        f"🎯 Hoje: {price_today}",
+    ]
+
+    if previous_price and discount_pct:
+        price_was = format_price_brl(previous_price)
+        discount_int = int(round(discount_pct))
+        lines.append(f"📉 Era: {price_was}")
+        lines.append(f"🔥 Desconto: {discount_int}% OFF")
+
+    lines.extend([
+        "",
+        "🛍️ Comprar aqui:",
+        url,
+        "",
+        "🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.",
+    ])
+
+    return "\n".join(lines)
+
+
+def scan_marketplace(
+    marketplace: str,
+    query: str,
+    api_base: str,
+    max_results: int,
+    min_discount: float,
+) -> list[dict[str, Any]]:
+    """Scan a single marketplace for deals."""
+    if marketplace == "amazon_br":
+        result = run_amazon(query, api_base, "/v1/scrape", max_results, 30, 2500)
+    elif marketplace == "mercadolivre_br":
+        result = run_mercadolivre(query, api_base, "/v1/scrape", max_results, 30, 2500)
+    else:
+        return []
+
+    products = result.get("products", [])
+    return extract_deals_from_products(products, marketplace, query, min_discount)
+
+
+def scan_all(
+    api_base: str,
+    max_results: int,
+    min_discount: float,
+    marketplaces: list[str],
+    queries: list[str],
+) -> list[dict[str, Any]]:
+    """Scan multiple queries across marketplaces."""
+    all_deals = []
+    for query in queries:
+        for marketplace in marketplaces:
+            try:
+                deals = scan_marketplace(marketplace, query, api_base, max_results, min_discount)
+                if deals:
+                    print(f"  ✓ {marketplace} / {query}: {len(deals)} deals found")
+                all_deals.extend(deals)
+            except Exception as exc:
+                print(f"  ✗ {marketplace} / {query}: {exc}")
+    return all_deals
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Scan marketplaces for products with displayed discounts.")
+    parser.add_argument("query", nargs="?", help="Search query (omit if using --all)")
+    parser.add_argument("--all", action="store_true", help="Scan all gamer categories")
+    parser.add_argument("--api-base", default="http://localhost:3000", help="Scrape server URL")
+    parser.add_argument("--max-results", type=int, default=15, help="Max results per marketplace/query")
+    parser.add_argument("--min-discount", type=float, default=10.0, help="Minimum discount %% to include")
+    parser.add_argument("--marketplaces", default="amazon_br,mercadolivre_br", help="Comma-separated marketplaces")
+    parser.add_argument("--output", help="Path to save messages JSON")
+    args = parser.parse_args()
+
+    if not args.query and not args.all:
+        parser.error("Provide a query or use --all")
+
+    marketplaces = [m.strip() for m in args.marketplaces.split(",")]
+    queries = GAMER_QUERIES if args.all else [args.query]
+
+    now = datetime.now(timezone.utc)
+    print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Scanning for deals (min {args.min_discount}% off)...\n")
+
+    deals = scan_all(args.api_base, args.max_results, args.min_discount, marketplaces, queries)
+
+    # Deduplicate by URL
+    seen_urls = set()
+    unique_deals = []
+    for deal in deals:
+        if deal["url"] not in seen_urls:
+            seen_urls.add(deal["url"])
+            unique_deals.append(deal)
+
+    print(f"\nTotal unique deals: {len(unique_deals)}")
+
+    # Format messages
+    messages = []
+    for deal in unique_deals:
+        message = format_deal_message(deal)
+        messages.append({
+            "title": deal["title"],
+            "marketplace": deal["marketplace"],
+            "current_price": deal["current_price"],
+            "discount_pct": deal["discount_pct"],
+            "url": deal["url"],
+            "message": message,
+        })
+
+    # Save to file
+    if messages:
+        MESSAGES_DIR.mkdir(parents=True, exist_ok=True)
+        ts = now.strftime("%Y%m%d_%H%M%S")
+        output_path = args.output or str(MESSAGES_DIR / f"deals_{ts}.json")
+        Path(output_path).write_text(json.dumps(
+            {"messages": messages, "count": len(messages), "generated_at": now.isoformat()},
+            ensure_ascii=False, indent=2,
+        ))
+        print(f"Saved to: {output_path}")
+
+        # Print messages
+        for msg in messages:
+            print(f"\n{'='*50}")
+            print(msg["message"])
+            print(f"{'='*50}")
+    else:
+        print("No deals found matching criteria.")
+
+
+if __name__ == "__main__":
+    main()

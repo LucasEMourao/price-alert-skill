@@ -136,7 +136,16 @@ class AmazonSearchHTMLParser(HTMLParser):
             self.card_depth -= 1
             if self.card_depth == 0:
                 if self.current_price_candidates:
+                    # First price is the current price
                     self.current["price_text"] = self.current_price_candidates[0]
+                    # If there's a second price higher than the first, it's the list price (original)
+                    if len(self.current_price_candidates) > 1:
+                        current_p = parse_brl_amount(self.current_price_candidates[0])
+                        for candidate in self.current_price_candidates[1:]:
+                            candidate_p = parse_brl_amount(candidate)
+                            if candidate_p and current_p and candidate_p > current_p:
+                                self.current["list_price_text"] = candidate
+                                break
 
                 if self.current.get("title") and self.current.get("url"):
                     self.products.append(self.current)
