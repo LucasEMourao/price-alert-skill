@@ -30,29 +30,85 @@ Monitorar preços de produtos em marketplaces brasileiros (Amazon BR, Mercado Li
 ## Etapas do Plano
 
 ### Etapa 1: Definir o formato da mensagem WhatsApp
-**Status:** Pendente (aguardando descrição do usuário)
+**Status:** Definido
 
-O usuário mencionou uma foto com o padrão desejado, mas o modelo não consegue ler imagens.
-**Ação necessária:** Usuário deve descrever o formato textualmente ou colar um exemplo de mensagem.
+**Formato fornecido pelo usuário:**
+```
+🎸 OFERTA DO DIA 👇 
 
-Elementos típicos de uma mensagem de alerta de oferta:
-- Emoji de alerta/oferta (🔥, 🏷️, 💰)
-- Nome do produto
-- Preço atual vs preço anterior/média
-- Percentual de desconto
-- Link direto para o produto
-- Marketplace de origem
-- Timestamp da captura
+🎚️ Guitarra Fender Squier Debut Stratocaster Hss Lr Green Orientação Da Mão Destro Verde-claro Pau-rosa
+
+🎯 Hoje: R$ 1604.26
+
+🛍️ Comprar aqui:
+https://meli.la/2KwVAYY
+
+🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+```
+
+**Padrão identificado:**
+1. **Linha 1:** Emoji temático + título da oferta + emoji seta
+2. **Linha 2 (vazia)**
+3. **Linha 3:** Emoji + nome completo do produto
+4. **Linha 4 (vazia)**
+5. **Linha 5:** Emoji + preço atual (formato `R$ XXXX.XX`, ponto como separador decimal)
+6. **Linha 6 (vazia)**
+7. **Linha 7:** Emoji + texto "Comprar aqui:"
+8. **Linha 8:** Link curto/direto do produto
+9. **Linha 9 (vazia)**
+10. **Linha 10:** Emoji + aviso sobre variação de valores/estoque
+
+**Adaptação para nosso caso (ofertas de tech gamer):**
+- Emoji temático pode variar: 🎮 🖥️ ⌨️ 🎧 🖱️ 💻 conforme o tipo de produto
+- Preço: mostrar apenas o preço atual (sem preço anterior na mensagem, a comparação é interna)
+- Link: usar link direto do marketplace (Amazon/MercadoLivre/Shopee)
+- Aviso final: manter a frase de escassez
+
+**Exemplo gerado:**
+```
+⌨️ OFERTA DO DIA 👇 
+
+🖱️ HyperX Pulsefire Haste 2 Wireless - Mouse Gamer Sem Fio, 8000 DPI, 61g
+
+🎯 Hoje: R$ 249.90
+
+🛍️ Comprar aqui:
+https://www.amazon.com.br/dp/B0BX4F5R2P
+
+🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+```
 
 ---
 
 ### Etapa 2: Configurar categoria de produtos específica
-**Status:** A fazer
+**Status:** Definido (implementação pendente)
+
+**Categoria definida pelo usuário:** Tecnologia gamer para computadores/notebooks
+
+**Subcategorias a monitorar:**
+
+| Subcategoria | Exemplos de busca |
+|---|---|
+| Mouse gamer | "mouse gamer", "mouse sem fio gamer", "mouse RGB" |
+| Teclado mecânico | "teclado mecanico gamer", "teclado gamer RGB" |
+| Headset gamer | "headset gamer", "fone gamer", "headset sem fio" |
+| Monitor gamer | "monitor gamer", "monitor 144hz", "monitor 240hz" |
+| SSD/NVMe | "ssd 2tb", "ssd nvme", "ssd gamer" |
+| Memória RAM | "memoria ram ddr5", "memoria ram gamer" |
+| Placa de vídeo | "placa de video", "rtx 4060", "rtx 4070" |
+| Notebook gamer | "notebook gamer", "notebook rtx" |
+| Gabinete gamer | "gabinete gamer", "gabinete rgb" |
+| Fonte gamer | "fonte gamer", "fonte 850w" |
+| Cooler | "cooler gamer", "water cooler" |
+| Cadeira gamer | "cadeira gamer" |
+| Mousepad | "mousepad gamer", "mousepad grande" |
+| Webcam gamer | "webcam gamer", "webcam streaming" |
+| Controle gamer | "controle gamer", "controle sem fio" |
 
 **O que será feito:**
-1. Definir com o usuário qual categoria monitorar (ex: "SSD 2TB", "placa de vídeo RTX", "notebook gamer")
-2. Criar watchlist no SQLite via `onboard_watchlist.py`
-3. Configurar `update_interval_minutes: 5`
+1. Criar watchlist(s) no SQLite via `onboard_watchlist.py` para cada subcategoria
+2. Configurar `update_interval_minutes: 5`
+3. Marketplaces: `amazon_br` e `mercadolivre_br` (Shopee fica de fora por enquanto)
 4. Rodar `--bootstrap` para popular dados iniciais
 
 **Arquivo de configuração:** `.agents/skills/price-alert-skill/references/watchlist-onboarding.example.json`
@@ -118,16 +174,45 @@ WHERE product_id = ?
 ---
 
 ### Etapa 5: Formatar mensagens para WhatsApp
-**Status:** A fazer (depende da Etapa 1)
+**Status:** Definido (implementação pendente)
 
 **O que será feito:**
-1. Adaptar `format_whatsapp_alerts.py` para o formato desejado pelo usuário
-2. Incluir: produto, preço, desconto %, link, marketplace
-3. Formato compatível com WhatsApp (negrito `*texto*`, itálico `_texto_`, código ```texto```)
-4. Limitar tamanho da mensagem (WhatsApp tem limite de 4096 caracteres)
+1. Adaptar `format_whatsapp_alerts.py` para o formato do usuário
+2. Gerar uma mensagem por produto com preço abaixo da média
+3. Incluir imagem do produto (se disponível no scraping)
+4. Formato compatível com WhatsApp
 
-**Estrutura sugerida (ajustar conforme padrão do usuário):**
+**Template da mensagem:**
 ```
+{emoji_categoria} OFERTA DO DIA 👇 
+
+{emoji_produto} {NOME_COMPLETO_DO_PRODUTO}
+
+🎯 Hoje: R$ {PRECO_ATUAL}
+
+🛍️ Comprar aqui:
+{LINK_DIRETO}
+
+🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+```
+
+**Emojis por categoria:**
+- Mouse: 🖱️
+- Teclado: ⌨️
+- Headset/Fone: 🎧
+- Monitor: 🖥️
+- SSD/HD: 💾
+- Memória RAM: 🧩
+- Placa de vídeo: 🎮
+- Notebook: 💻
+- Gabinete: 🏠
+- Fonte: ⚡
+- Cooler: ❄️
+- Cadeira: 🪑
+- Mousepad: 🎯
+- Webcam: 📷
+- Controle: 🎮
+- Outros: 🎮
 🔥 *OFERTA NO RADAR!*
 
 📦 *Produto:* Samsung 990 PRO 2TB NVMe
@@ -203,20 +288,21 @@ WHERE product_id = ?
 
 ## Cronograma sugerido
 
-| Etapa | Descrição | Dependências | Estimativa |
-|---|---|---|---|
-| 1 | Definir formato mensagem | Nenhuma | Aguardando usuário |
-| 2 | Configurar categoria/watchlist | Etapa 1 | 30 min |
-| 3 | Implementar agendamento | Etapa 2 | 1 hora |
-| 4 | Lógica preço abaixo da média | Etapa 3 | 1 hora |
-| 5 | Formatar mensagens WhatsApp | Etapa 1 | 30 min |
-| 6 | Integrar pipeline completo | Etapas 3-5 | 1 hora |
-| 7 | Integração WhatsApp (opcional) | Etapa 6 | 2+ horas |
+| Etapa | Descrição | Dependências | Status | Estimativa |
+|---|---|---|---|---|
+| 1 | Definir formato mensagem | Nenhuma | **Concluído** | — |
+| 2 | Configurar categoria/watchlist | Etapa 1 | **Definido** | 30 min |
+| 3 | Implementar agendamento | Etapa 2 | A fazer | 1 hora |
+| 4 | Lógica preço abaixo da média | Etapa 3 | A fazer | 1 hora |
+| 5 | Formatar mensagens WhatsApp | Etapa 1 | **Definido** | 30 min |
+| 6 | Integrar pipeline completo | Etapas 3-5 | A fazer | 1 hora |
+| 7 | Integração WhatsApp (opcional) | Etapa 6 | A fazer | 2+ horas |
 
 ---
 
 ## Próximos passos imediatos
 
-1. **Usuário descreve o formato da mensagem WhatsApp** (ou cola exemplo textual)
-2. **Usuário define a categoria de produtos** a ser monitorada
-3. Começamos pela Etapa 2 (criar watchlist) e Etapa 3 (agendamento)
+1. **Etapa 2:** Criar watchlists para subcategorias gamer (mouse, teclado, headset, etc.)
+2. **Etapa 3:** Implementar `scheduler.py` para rodar a cada 5 minutos
+3. **Etapa 4:** Implementar lógica de detecção de preço abaixo da média
+4. **Etapa 5:** Adaptar `format_whatsapp_alerts.py` para o template definido
