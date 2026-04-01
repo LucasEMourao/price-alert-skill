@@ -6,59 +6,55 @@ Este arquivo documenta o contexto completo do projeto e as decisões tomadas. Ú
 ---
 
 ## O que é a skill
-A `price-alert-skill` é um monitor de preços automático para marketplaces brasileiros (Amazon BR, Mercado Livre, Shopee BR). Ela:
-- Busca produtos por categoria ou links específicos
-- Armazena histórico de preços em SQLite
-- Gera alertas de ofertas deduplicados, prontos para WhatsApp
-- Suporta atualizações recorrentes a cada N minutos
-- Enriquece dados com baseline do Zoom.com.br
+A `price-alert-skill` é um monitor de ofertas para marketplaces brasileiros (Amazon BR, Mercado Livre). Ela:
+- Busca produtos por categoria em marketplaces
+- Extrai preços atuais e descontos exibidos pelo próprio marketplace
+- Gera mensagens formatadas para WhatsApp com ofertas encontradas
+- **NÃO usa SQLite** — a abordagem atual repassa apenas o que o marketplace exibe
 
 ## Estrutura do repositório
 ```
 .agents/skills/price-alert-skill/
-├── SKILL.md                    # Documentação principal da skill
-├── requirements.txt            # Dependências Python
-├── references/                 # Documentação de referência
-│   ├── extraction-rules-*.md   # Regras de parsing por marketplace
-│   ├── output-schema.md        # Schema de saída dos fetchers
-│   ├── storage-layout.md       # Schema do banco SQLite
-│   └── *.example.json          # Exemplos de configuração
+├── SKILL.md                         # Documentação principal
+├── CONTEXT.md                       # Este arquivo (contexto do projeto)
+├── PLANO.md                         # Plano de execução e etapas
+├── requirements.txt                 # Dependências Python
+├── references/                      # Documentação de referência
+│   ├── extraction-rules-*.md        # Regras de parsing por marketplace
+│   ├── watchlist-gamer.json         # Config de watchlists gamer
+│   └── *.example.json               # Exemplos de configuração
 └── scripts/
-    ├── scrape_server.py        # Servidor Playwright (substitui Steel Browser)
-    ├── fetch_amazon_br.py      # Fetcher Amazon Brasil
-    ├── fetch_mercadolivre_br.py # Fetcher Mercado Livre
-    ├── fetch_shopee_br.py      # Fetcher Shopee Brasil
-    ├── onboard_watchlist.py    # Cria watchlists a partir de JSON
-    ├── update_watchlist.py     # Atualiza watchlists pendentes
-    ├── refresh_watchlist_messages.py # Gera mensagens WhatsApp
-    ├── generate_alert_payloads.py    # Gera payloads de alerta
-    ├── format_whatsapp_alerts.py     # Formata mensagens WhatsApp
-    ├── run_all_monitors.py     # Executa todos os monitores
-    ├── monitor_query.py        # Monitora uma query específica
-    ├── enrich_with_zoom.py     # Enriquece com dados do Zoom
-    ├── fetch_zoom_history.py   # Busca histórico Zoom
-    ├── link_zoom_product.py    # Vincula produto ao Zoom
-    ├── report_price_history.py # Relatório de histórico
-    ├── create_shopee_session.py # Cria sessão Shopee (login)
-    └── run-config.example.json # Exemplo de config
+    ├── scrape_server.py             # Servidor Playwright (substitui Steel Browser)
+    ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
+    ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (extrai list_price)
+    ├── fetch_mercadolivre_br.py     # Fetcher Mercado Livre
+    ├── fetch_shopee_br.py           # Fetcher Shopee Brasil (parcial)
+    ├── format_deal_messages.py      # Formata deals como WhatsApp
+    ├── detect_deals.py              # Detecta deals por histórico SQLite (legado)
+    ├── scheduler.py                 # Agendador com SQLite (legado)
+    ├── monitor_query.py             # Monitora query com SQLite (legado)
+    ├── onboard_watchlist.py         # Cria watchlists no SQLite (legado)
+    └── ... (outros scripts legados)
 ```
 
+**Scripts ativos:** `scrape_server.py`, `scan_deals.py`, `fetch_amazon_br.py`, `fetch_mercadolivre_br.py`
+**Scripts legados:** Todos os que usam SQLite (`monitor_query.py`, `scheduler.py`, `detect_deals.py`, etc.)
+
 ## Dependências
-- **Python 3.12+** (stdlib apenas para os scripts originais)
+- **Python 3.12+** (stdlib apenas)
 - **fastapi** — servidor HTTP
 - **uvicorn** — servidor ASGI
 - **playwright** — browser headless com stealth
 - **Chromium** — `playwright install chromium`
-- **Dependências de sistema**: `libnspr4`, `libnss3` (e outras libs listadas pelo `playwright install-deps`)
+- **Dependências de sistema**: `sudo apt install -y libnspr4 libnss3`
 
-## Como usar
+## Como usar (fluxo atual)
 
 ### 1. Instalar dependências
 ```bash
 pip install fastapi uvicorn playwright
 playwright install chromium
-# Se der erro de libs do sistema:
-sudo apt install -y libnspr4 libnss3
+sudo apt install -y libnspr4 libnss3  # se necessário
 ```
 
 ### 2. Iniciar o servidor de scraping
@@ -67,68 +63,87 @@ cd .agents/skills/price-alert-skill/scripts
 python3 scrape_server.py --port 3000
 ```
 
-### 3. Usar os fetchers
+### 3. Buscar ofertas (script principal)
 ```bash
-python3 fetch_amazon_br.py "ssd 2tb" --api-base http://localhost:3000
-python3 fetch_mercadolivre_br.py "placa de video" --api-base http://localhost:3000
-python3 fetch_shopee_br.py "memoria ram" --api-base http://localhost:3000
+# Buscar ofertas de uma categoria
+python3 scan_deals.py "mouse gamer" --min-discount 10
+
+# Buscar TODAS as categorias gamer
+python3 scan_deals.py --all --min-discount 10
+
+# Opções
+python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
+python3 scan_deals.py --all --marketplaces amazon_br --min-discount 15
 ```
 
-### 4. Criar uma watchlist
-```bash
-python3 onboard_watchlist.py ../references/watchlist-onboarding.example.json --bootstrap --db-path ../data/price_history.sqlite3
+### 4. Resultado
+As mensagens são salvas em `data/messages/deals_YYYYMMDD_HHMMSS.json` e exibidas no terminal, prontas para copiar para WhatsApp.
+
+## Decisões tomadas
+
+### 1. Substituição do Steel Browser
+- **Problema**: Skill original dependia do Steel Browser (serviço externo pago).
+- **Solução**: `scrape_server.py` com Playwright + Chromium local, replicando mesma API.
+- **Stealth**: user-agent aleatório, viewport randomizado, injeção de JS anti-detecção.
+
+### 2. Shopee — descartada
+- Proteção anti-bot agressiva (interstitial, CAPTCHA).
+- Login manual inviável (cookies expiram em 12h).
+- **Decisão**: Focar apenas em Amazon BR e Mercado Livre.
+
+### 3. Abordagem sem SQLite (decisão final)
+- **Problema inicial**: Usar SQLite para histórico de preços e calcular média/mediana.
+- **Análise**: Para detectar "promoção real", seria necessário coletar dados por semanas/meses.
+- **Decisão do usuário**: Repassar apenas o desconto que o marketplace exibe. Se o site mostra "de R$ 2.000 por R$ 1.500", essa é a informação oficial — não é necessário validar se é "promoção real".
+- **Vantagens**: Zero banco de dados, zero agendamento, zero manutenção. Scraping sob demanda.
+- **Limitação aceita**: Descontos exibidos pelo marketplace podem ser inflados artificialmente, mas a responsabilidade é do marketplace, não nossa.
+
+### 4. Parser da Amazon atualizado
+- Parser original não extraía `list_price` (preço anterior riscado).
+- Ajustado para detectar segundo preço `a-offscreen` maior que o primeiro = preço original.
+- Resultado: 90% dos produtos agora retornam desconto exibido.
+
+### 5. Formato das mensagens WhatsApp
+Definido pelo usuário com base em exemplo real:
+```
+{emoji} OFERTA DO DIA 👇
+
+{emoji} {NOME_PRODUTO}
+
+🎯 Hoje: R$ {PRECO_ATUAL}
+📉 Era: R$ {PRECO_ANTERIOR}
+🔥 Desconto: {PERCENTUAL}% OFF
+
+🛍️ Comprar aqui:
+{LINK}
+
+🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
 
-## Decisões tomadas nesta sessão
-
-### Substituição do Steel Browser
-- **Problema**: A skill original dependia do Steel Browser (`localhost:3000`), um serviço de scraping headless pago/externo.
-- **Solução**: Criado `scrape_server.py`, um servidor local com Playwright + Chromium que replica a mesma API do Steel (`POST /v1/scrape`, `POST /v1/sessions`, `GET /v1/sessions/{id}/context`).
-- **Stealth**: O servidor usa técnicas anti-detecção: user-agent aleatório, viewport randomizado, injeção de JS para ocultar `navigator.webdriver`, headers realistas.
-
-### Shopee — login não automatizado
-- A Shopee tem proteção anti-bot agressiva (interstitial, CAPTCHA).
-- Foi implementado endpoint `POST /v1/sessions/{id}/login` que abre Chromium com GUI para login manual.
-- **Conclusão**: Login manual é inviável porque cookies expiram em ~12h. Shopee fica pendente para solução futura.
-- Sem login, a Shopee frequentemente retorna interstitial em vez de resultados.
-
-### Status dos marketplaces (31/03/2026)
+## Status dos marketplaces (01/04/2026)
 | Marketplace | Status | Observação |
 |---|---|---|
-| Amazon BR | Funcionando | Stealth efetivo, sem bloqueios |
-| Mercado Livre | Funcionando | Stealth efetivo, sem bloqueios |
-| Shopee BR | Parcial | Interstitial anti-bot, login inviável |
-
-### Estrutura do repositório
-- Inicialmente criado na pasta raiz `agentSkills/`
-- Reorganizado para `.agents/skills/price-alert-skill/` seguindo convenção
-- Branch renomeada de `master` para `main`
-
-## Endpoints do scrape_server.py
-| Endpoint | Método | Descrição |
-|---|---|---|
-| `/v1/scrape` | POST | Scraping de URL. Body: `{"url": "...", "delay": N}` |
-| `/v1/sessions` | POST | Cria sessão para login |
-| `/v1/sessions/{id}/context` | GET | Retorna cookies da sessão |
-| `/v1/sessions/{id}/login` | POST | Abre Chromium com GUI para login Shopee |
-| `/v1/sessions/{id}/save` | POST | Salva cookies explícitos |
-| `/v1/sessions/{id}/check` | GET | Verifica status de login |
-
-## Possíveis melhorias futuras
-- **Shopee**: Usar `undetected-chromedriver` (requer Chrome instalado) ou API oficial
-- **Zoom**: O enriquecimento via Zoom pode precisar de ajustes nos extraction rules
-- **Agendamento**: Implementar cron/scheduler para atualizações recorrentes
-- **Notificações**: Integração real com WhatsApp (atualmente gera apenas texto formatado)
-- **Testes**: Adicionar testes unitários para parsers e fetchers
+| Amazon BR | Funcionando | Extrai preço atual + preço anterior riscado |
+| Mercado Livre | Funcionando | Extrai preço atual (preço anterior pendente) |
+| Shopee BR | Descartada | Proteção anti-bot inviabiliza uso |
 
 ## Comandos úteis
 ```bash
-# Testar fetcher específico
-python3 fetch_amazon_br.py "ssd 2tb" --api-base http://localhost:3000 --max-results 5
+# Iniciar servidor de scraping
+python3 scrape_server.py --port 3000
 
-# Ver histórico de preços
-python3 report_price_history.py --db-path ../data/price_history.sqlite3
+# Buscar ofertas de mouse gamer
+python3 scan_deals.py "mouse gamer" --min-discount 10
 
-# Gerar alertas
-python3 generate_alert_payloads.py --query "ssd 2tb" --db-path ../data/price_history.sqlite3
+# Buscar todas as categorias gamer
+python3 scan_deals.py --all --min-discount 10
+
+# Buscar com mais resultados
+python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
 ```
+
+## Possíveis melhorias futuras
+- **Mercado Livre**: Ajustar parser para extrair preço anterior riscado (como feito na Amazon)
+- **Integração WhatsApp**: Enviar mensagens automaticamente via API ou pywhatkit
+- **Filtro por preço mínimo**: Ignorar produtos muito baratos (acessórios genéricos)
+- **Deduplicação**: Evitar repetir ofertas já enviadas anteriormente
