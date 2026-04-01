@@ -60,11 +60,11 @@ https://meli.la/2KwVAYY
 
 **Adaptação para nosso caso (ofertas de tech gamer):**
 - Emoji temático pode variar: 🎮 🖥️ ⌨️ 🎧 🖱️ 💻 conforme o tipo de produto
-- Preço: mostrar apenas o preço atual (sem preço anterior na mensagem, a comparação é interna)
+- **Preço:** mostrar preço atual + comparação com preço anterior quando houver desconto (gera gatilho de urgência/escassez)
 - Link: usar link direto do marketplace (Amazon/MercadoLivre/Shopee)
 - Aviso final: manter a frase de escassez
 
-**Exemplo gerado:**
+**Exemplo gerado (sem desconto — primeiro registro):**
 ```
 ⌨️ OFERTA DO DIA 👇 
 
@@ -77,6 +77,28 @@ https://www.amazon.com.br/dp/B0BX4F5R2P
 
 🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
+
+**Exemplo gerado (com desconto — gera gatilho):**
+```
+🖱️ OFERTA DO DIA 👇 
+
+⌨️ HyperX Pulsefire Haste 2 Wireless - Mouse Gamer Sem Fio, 8000 DPI, 61g
+
+🎯 Hoje: R$ 189.90
+📉 Era: R$ 299.90
+🔥 Desconto: 37% OFF
+
+🛍️ Comprar aqui:
+https://www.amazon.com.br/dp/B0BX4F5R2P
+
+🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+```
+
+**Regras para exibir comparação:**
+- Só exibir `📉 Era:` e `🔥 Desconto:` quando o desconto for >= 5% em relação ao último preço registrado
+- `Era:` usa o último preço anterior não-nulo do banco
+- `Desconto:` é calculado como `((preço_anterior - preço_atual) / preço_anterior) * 100`, arredondado para inteiro
+- Se não houver preço anterior ou desconto < 5%, exibir apenas o preço atual (formato simples)
 
 ---
 
@@ -182,13 +204,29 @@ WHERE product_id = ?
 3. Incluir imagem do produto (se disponível no scraping)
 4. Formato compatível com WhatsApp
 
-**Template da mensagem:**
+**Template da mensagem (sem desconto):**
 ```
 {emoji_categoria} OFERTA DO DIA 👇 
 
 {emoji_produto} {NOME_COMPLETO_DO_PRODUTO}
 
 🎯 Hoje: R$ {PRECO_ATUAL}
+
+🛍️ Comprar aqui:
+{LINK_DIRETO}
+
+🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+```
+
+**Template da mensagem (com desconto >= 5%):**
+```
+{emoji_categoria} OFERTA DO DIA 👇 
+
+{emoji_produto} {NOME_COMPLETO_DO_PRODUTO}
+
+🎯 Hoje: R$ {PRECO_ATUAL}
+📉 Era: R$ {PRECO_ANTERIOR}
+🔥 Desconto: {PERCENTUAL}% OFF
 
 🛍️ Comprar aqui:
 {LINK_DIRETO}
