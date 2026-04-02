@@ -82,8 +82,8 @@ python3 scripts/scan_deals.py --all --marketplaces amazon_br --min-discount 15
 
 {emoji} {NOME_DO_PRODUTO}
 
+~~📉 Era: R$ {PRECO_ANTERIOR}~~
 🎯 Hoje: R$ {PRECO_ATUAL}
-📉 Era: R$ {PRECO_ANTERIOR}
 🔥 Desconto: {PERCENTUAL}% OFF
 
 🛍️ Comprar aqui:
@@ -105,6 +105,8 @@ python3 scripts/scan_deals.py --all --marketplaces amazon_br --min-discount 15
 
 🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
+
+O link do produto no final da mensagem gera automaticamente um preview com imagem no WhatsApp.
 
 ## Dependencias
 

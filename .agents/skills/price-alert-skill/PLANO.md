@@ -1,27 +1,25 @@
 # PLANO — Monitor de Ofertas com Alertas WhatsApp
 
 ## Objetivo Final
-Buscar ofertas em marketplaces brasileiros (Amazon BR, Mercado Livre), extrair descontos exibidos pelo próprio marketplace, e gerar mensagens formatadas para grupos de WhatsApp.
+Buscar ofertas em marketplaces brasileiros (Amazon BR, Mercado Livre), extrair descontos exibidos pelo próprio marketplace, e enviar mensagens com imagens automaticamente para grupos de WhatsApp.
 
 ---
 
 ## Status Atual: ✅ FUNCIONANDO
 
-O pipeline básico está implementado e testado. O script principal é `scan_deals.py`.
+O pipeline de busca e formatação está implementado e testado. O script principal é `scan_deals.py`.
 
 ---
 
 ## Abordagem Escolhida
 
-**Decisão do usuário:** Repassar apenas o desconto que o marketplace exibe. Se o site mostra "de R$ 2.000 por R$ 1.500 com 25% OFF", essa é a informação oficial. Não é necessário validar se é "promoção real" — a responsabilidade é do marketplace.
+**Decisão do usuário:** Repassar apenas o desconto que o marketplace exibe. Se o site mostra "de R$ 2.000 por R$ 1.500 com 25% OFF", essa é a informação oficial. Não é necessário validar se é "promoção real".
 
 **Vantagens:**
 - Sem banco de dados (SQLite)
 - Sem agendamento complexo
 - Scraping sob demanda
 - Zero manutenção
-
-**Limitação aceita:** Descontos exibidos podem ser inflados artificialmente pelo vendedor, mas não é nossa responsabilidade validar.
 
 ---
 
@@ -43,22 +41,16 @@ python3 scan_deals.py --all --min-discount 10
 
 ## O que já foi feito
 
-### ✅ Concluído
 | Item | Descrição |
 |---|---|
 | Servidor de scraping | `scrape_server.py` com Playwright + stealth (substitui Steel Browser) |
 | Fetcher Amazon | Extrai preço atual + preço anterior riscado (`list_price`) |
-| Fetcher Mercado Livre | Extrai preço atual (preço anterior pendente) |
+| Fetcher Mercado Livre | Parser reescrito para nova estrutura HTML — extrai preço atual + preço anterior riscado |
 | Script principal | `scan_deals.py` — busca ofertas e gera mensagens WhatsApp |
-| Formato das mensagens | Template definido com emojis por categoria |
+| Formato das mensagens | Template com preço antigo riscado (`~~...~~`) acima do preço atual |
 | Categorias gamer | 12 queries de busca configuradas em `scan_deals.py` |
-
-### ⏳ Pendente
-| Item | Descrição |
-|---|---|
-| Mercado Livre list_price | Parser não extrai preço anterior riscado ainda |
-| Integração WhatsApp | Mensagens são salvas em arquivo, não enviadas automaticamente |
-| Shopee BR | Descartada (proteção anti-bot inviabiliza) |
+| Código consolidado | `utils.py` com funções compartilhadas |
+| Zoom/Shopee/SQLite | Removidos (pipeline legado descartado) |
 
 ---
 
@@ -69,8 +61,8 @@ python3 scan_deals.py --all --min-discount 10
 
 {emoji} {NOME_PRODUTO}
 
+~~📉 Era: R$ {PRECO_ANTERIOR}~~
 🎯 Hoje: R$ {PRECO_ATUAL}
-📉 Era: R$ {PRECO_ANTERIOR}
 🔥 Desconto: {PERCENTUAL}% OFF
 
 🛍️ Comprar aqui:
@@ -80,8 +72,40 @@ python3 scan_deals.py --all --min-discount 10
 ```
 
 **Regras:**
-- `📉 Era:` e `🔥 Desconto:` só aparecem quando desconto >= `--min-discount` (padrão: 10%)
+- Preço antigo riscado aparece acima do preço atual (mais intuitivo)
+- `Era:` e `Desconto:` só aparecem quando desconto >= `--min-discount` (padrão: 10%)
 - Se não houver preço anterior exibido, mostra apenas preço atual
+- Link do produto gera preview com imagem automaticamente no WhatsApp
+
+---
+
+## Próximos Passos
+
+### Passo 1: Implementar envio automático para WhatsApp
+**Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web.
+
+**Estratégia escolhida: Imagem como mídia (Opção 1)**
+1. Baixar imagem do produto antes de enviar
+2. Enviar a imagem como mídia no WhatsApp Web (via Selenium/Playwright)
+3. Enviar a mensagem de texto logo em seguida
+4. Repetir para cada produto
+
+**Arquivos a criar:**
+- `scripts/send_to_whatsapp.py` — script de envio via WhatsApp Web
+
+**Dependências a adicionar:**
+- `selenium` ou `pywhatkit` para automação do WhatsApp Web
+- `requests` ou `httpx` para download das imagens
+
+### Passo 2: Implementar deduplicação
+**Objetivo:** Evitar repetir ofertas já enviadas anteriormente.
+
+**Estratégia:**
+- Armazenar hash/fingerprint das ofertas enviadas em arquivo simples (JSON)
+- Antes de enviar, verificar se a oferta já foi enviada
+- Limpar histórico automaticamente após N dias
+
+**Arquivo:** `data/sent_deals.json`
 
 ---
 
@@ -109,16 +133,16 @@ Configuradas em `scan_deals.py` (variável `GAMER_QUERIES`):
 2. **Shopee descartada** — Proteção anti-bot inviabiliza uso sem login manual constante
 3. **SQLite → Sem banco** — Decisão do usuário: repassar apenas dados exibidos pelo marketplace
 4. **Agendamento → Sob demanda** — Não é necessário agendar; usuário executa quando quiser
-5. **Parser Amazon atualizado** — Agora extrai `list_price` (preço anterior riscado)
+5. **Parser Mercado Livre reescrito** — HTML mudou; agora usa `aria-label` para preços
+6. **Preço antigo riscado acima** — Formato mais intuitivo visualmente
+7. **Imagem via link** — Link do produto no final gera preview automático no WhatsApp
 
 ---
 
-## Possíveis Melhorias Futuras
+## Histórico de Commits
 
-| Prioridade | Melhoria | Descrição |
-|---|---|---|
-| Alta | Mercado Livre list_price | Ajustar parser para extrair preço anterior |
-| Média | Filtro por preço mínimo | Ignorar produtos muito baratos (acessórios genéricos) |
-| Média | Deduplicação | Evitar repetir ofertas já enviadas |
-| Baixa | Integração WhatsApp | Enviar via pywhatkit ou WhatsApp Business API |
-| Baixa | Mais marketplaces | Adicionar Kabum, Pichau, Terabyte |
+| Commit | Descrição |
+|---|---|
+| `37203b1` | Refactor: remove SQLite/Zoom pipeline, consolidate code, fix ML parser |
+| `c8384da` | Update CONTEXT.md and PLANO.md with simplified approach |
+| `4c823e4` | Add scan_deals.py - simplified approach without SQLite |

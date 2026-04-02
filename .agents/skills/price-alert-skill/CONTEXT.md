@@ -83,39 +83,35 @@ As mensagens são salvas em `data/messages/deals_YYYYMMDD_HHMMSS.json` e exibida
 - **Decisão**: Focar apenas em Amazon BR e Mercado Livre.
 
 ### 3. Abordagem sem SQLite (decisão final)
-- **Problema inicial**: Usar SQLite para histórico de preços e calcular média/mediana.
-- **Análise**: Para detectar "promoção real", seria necessário coletar dados por semanas/meses.
-- **Decisão do usuário**: Repassar apenas o desconto que o marketplace exibe. Se o site mostra "de R$ 2.000 por R$ 1.500", essa é a informação oficial — não é necessário validar se é "promoção real".
-- **Vantagens**: Zero banco de dados, zero agendamento, zero manutenção. Scraping sob demanda.
-- **Limitação aceita**: Descontos exibidos pelo marketplace podem ser inflados artificialmente, mas a responsabilidade é do marketplace, não nossa.
+- Repassar apenas o desconto que o marketplace exibe.
+- Zero banco de dados, zero agendamento, zero manutenção.
 
 ### 4. Zoom — removido
-- Era usado como baseline externa de preços no pipeline SQLite.
-- Com a decisão de abandonar SQLite, o Zoom não tem mais função.
 - Scripts removidos: `fetch_zoom_history.py`, `link_zoom_product.py`, `enrich_with_zoom.py`.
 
 ### 5. Parser da Amazon atualizado
-- Parser original não extraía `list_price` (preço anterior riscado).
-- Ajustado para detectar segundo preço `a-offscreen` maior que o primeiro = preço original.
-- Resultado: 90% dos produtos agora retornam desconto exibido.
+- Extrai `list_price` (preço anterior riscado) detectando segundo preço `a-offscreen` maior que o primeiro.
 
-### 6. Parser do Mercado Livre atualizado
-- Parser original não extraía `list_price`.
-- Ajustado para detectar preços com classe `andes-money-amount` — primeiro preço = atual, segundo maior = anterior riscado.
+### 6. Parser do Mercado Livre reescrito
+- HTML do ML mudou completamente (de `li.ui-search-layout__item` para `div.ui-search-result__wrapper`).
+- Extrai preços dos `aria-label="Agora:"` e `aria-label="Antes:"`.
+- URLs reais construídas a partir dos IDs MLB.
 
 ### 7. Código duplicado consolidado
-- Funções `detect_category_emoji`, `format_price_brl`, `calculate_discount`, `format_deal_message` e `CATEGORY_EMOJIS` estavam duplicadas em `scan_deals.py` e `format_deal_messages.py`.
-- Consolidadas em `scripts/utils.py`.
+- Funções compartilhadas em `scripts/utils.py` (emojis, formatação de preço, template de mensagem).
 
 ### 8. Formato das mensagens WhatsApp
-Definido pelo usuário com base em exemplo real:
+- Preço antigo (Era:) exibido primeiro com strikethrough (`~~...~~`).
+- Preço atual (Hoje:) exibido abaixo.
+- Link do produto no final (WhatsApp gera preview com imagem automaticamente).
+
 ```
 {emoji} OFERTA DO DIA 👇
 
 {emoji} {NOME_PRODUTO}
 
+~~📉 Era: R$ {PRECO_ANTERIOR}~~
 🎯 Hoje: R$ {PRECO_ATUAL}
-📉 Era: R$ {PRECO_ANTERIOR}
 🔥 Desconto: {PERCENTUAL}% OFF
 
 🛍️ Comprar aqui:
@@ -145,9 +141,3 @@ python3 scan_deals.py --all --min-discount 10
 # Buscar com mais resultados
 python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
 ```
-
-## Possíveis melhorias futuras
-- **Integração WhatsApp**: Enviar mensagens automaticamente via API ou pywhatkit
-- **Filtro por preço mínimo**: Ignorar produtos muito baratos (acessórios genéricos)
-- **Deduplicação entre execuções**: Evitar repetir ofertas já enviadas anteriormente
-- **Novos marketplaces**: Kabum, Pichau, Terabyte

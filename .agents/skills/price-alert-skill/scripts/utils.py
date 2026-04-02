@@ -64,6 +64,7 @@ def format_deal_message(deal: dict[str, Any]) -> str:
     url = deal["url"]
     discount_pct = deal["discount_pct"]
     previous_price = deal.get("previous_price")
+    image_url = deal.get("image_url")
     query = deal.get("query", "")
 
     emoji = detect_category_emoji(title, query)
@@ -77,15 +78,29 @@ def format_deal_message(deal: dict[str, Any]) -> str:
         f"{emoji} OFERTA DO DIA 👇",
         "",
         f"{emoji} {title}",
-        "",
-        f"🎯 Hoje: {price_today}",
     ]
 
     if previous_price and discount_pct:
         price_was = format_price_brl(previous_price)
         discount_int = int(round(discount_pct))
-        lines.append(f"📉 Era: {price_was}")
-        lines.append(f"🔥 Desconto: {discount_int}% OFF")
+        lines.extend([
+            "",
+            f"~~📉 Era: {price_was}~~",
+            f"🎯 Hoje: {price_today}",
+            f"🔥 Desconto: {discount_int}% OFF",
+        ])
+    else:
+        lines.extend([
+            "",
+            f"🎯 Hoje: {price_today}",
+        ])
+
+    if image_url:
+        lines.extend([
+            "",
+            "📷 Imagem do produto:",
+            image_url,
+        ])
 
     lines.extend([
         "",
