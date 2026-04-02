@@ -6,11 +6,11 @@ Este arquivo documenta o contexto completo do projeto e as decisões tomadas. Ú
 ---
 
 ## O que é a skill
-A `price-alert-skill` é um monitor de ofertas para marketplaces brasileiros (Amazon BR, Mercado Livre). Ela:
+A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (Amazon BR, Mercado Livre). Ela:
 - Busca produtos por categoria em marketplaces
 - Extrai preços atuais e descontos exibidos pelo próprio marketplace
 - Gera mensagens formatadas para WhatsApp com ofertas encontradas
-- **NÃO usa SQLite** — a abordagem atual repassa apenas o que o marketplace exibe
+- **NÃO usa SQLite** — abordagem é scraping sob demanda
 
 ## Estrutura do repositório
 ```
@@ -20,25 +20,16 @@ A `price-alert-skill` é um monitor de ofertas para marketplaces brasileiros (Am
 ├── PLANO.md                         # Plano de execução e etapas
 ├── requirements.txt                 # Dependências Python
 ├── references/                      # Documentação de referência
-│   ├── extraction-rules-*.md        # Regras de parsing por marketplace
-│   ├── watchlist-gamer.json         # Config de watchlists gamer
-│   └── *.example.json               # Exemplos de configuração
+│   ├── extraction-rules-amazon.md   # Regras de parsing Amazon
+│   ├── extraction-rules-mercadolivre.md  # Regras de parsing ML
+│   └── output-schema.md             # Schema de saída dos fetchers
 └── scripts/
     ├── scrape_server.py             # Servidor Playwright (substitui Steel Browser)
     ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
     ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (extrai list_price)
-    ├── fetch_mercadolivre_br.py     # Fetcher Mercado Livre
-    ├── fetch_shopee_br.py           # Fetcher Shopee Brasil (parcial)
-    ├── format_deal_messages.py      # Formata deals como WhatsApp
-    ├── detect_deals.py              # Detecta deals por histórico SQLite (legado)
-    ├── scheduler.py                 # Agendador com SQLite (legado)
-    ├── monitor_query.py             # Monitora query com SQLite (legado)
-    ├── onboard_watchlist.py         # Cria watchlists no SQLite (legado)
-    └── ... (outros scripts legados)
+    ├── fetch_mercadolivre_br.py     # Fetcher Mercado Livre (extrai list_price)
+    └── utils.py                     # Funções compartilhadas (emojis, formatação, templates)
 ```
-
-**Scripts ativos:** `scrape_server.py`, `scan_deals.py`, `fetch_amazon_br.py`, `fetch_mercadolivre_br.py`
-**Scripts legados:** Todos os que usam SQLite (`monitor_query.py`, `scheduler.py`, `detect_deals.py`, etc.)
 
 ## Dependências
 - **Python 3.12+** (stdlib apenas)
@@ -98,12 +89,25 @@ As mensagens são salvas em `data/messages/deals_YYYYMMDD_HHMMSS.json` e exibida
 - **Vantagens**: Zero banco de dados, zero agendamento, zero manutenção. Scraping sob demanda.
 - **Limitação aceita**: Descontos exibidos pelo marketplace podem ser inflados artificialmente, mas a responsabilidade é do marketplace, não nossa.
 
-### 4. Parser da Amazon atualizado
+### 4. Zoom — removido
+- Era usado como baseline externa de preços no pipeline SQLite.
+- Com a decisão de abandonar SQLite, o Zoom não tem mais função.
+- Scripts removidos: `fetch_zoom_history.py`, `link_zoom_product.py`, `enrich_with_zoom.py`.
+
+### 5. Parser da Amazon atualizado
 - Parser original não extraía `list_price` (preço anterior riscado).
 - Ajustado para detectar segundo preço `a-offscreen` maior que o primeiro = preço original.
 - Resultado: 90% dos produtos agora retornam desconto exibido.
 
-### 5. Formato das mensagens WhatsApp
+### 6. Parser do Mercado Livre atualizado
+- Parser original não extraía `list_price`.
+- Ajustado para detectar preços com classe `andes-money-amount` — primeiro preço = atual, segundo maior = anterior riscado.
+
+### 7. Código duplicado consolidado
+- Funções `detect_category_emoji`, `format_price_brl`, `calculate_discount`, `format_deal_message` e `CATEGORY_EMOJIS` estavam duplicadas em `scan_deals.py` e `format_deal_messages.py`.
+- Consolidadas em `scripts/utils.py`.
+
+### 8. Formato das mensagens WhatsApp
 Definido pelo usuário com base em exemplo real:
 ```
 {emoji} OFERTA DO DIA 👇
@@ -120,11 +124,11 @@ Definido pelo usuário com base em exemplo real:
 🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
 
-## Status dos marketplaces (01/04/2026)
+## Status dos marketplaces (02/04/2026)
 | Marketplace | Status | Observação |
 |---|---|---|
 | Amazon BR | Funcionando | Extrai preço atual + preço anterior riscado |
-| Mercado Livre | Funcionando | Extrai preço atual (preço anterior pendente) |
+| Mercado Livre | Funcionando | Extrai preço atual + preço anterior riscado |
 | Shopee BR | Descartada | Proteção anti-bot inviabiliza uso |
 
 ## Comandos úteis
@@ -143,7 +147,7 @@ python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
 ```
 
 ## Possíveis melhorias futuras
-- **Mercado Livre**: Ajustar parser para extrair preço anterior riscado (como feito na Amazon)
 - **Integração WhatsApp**: Enviar mensagens automaticamente via API ou pywhatkit
 - **Filtro por preço mínimo**: Ignorar produtos muito baratos (acessórios genéricos)
-- **Deduplicação**: Evitar repetir ofertas já enviadas anteriormente
+- **Deduplicação entre execuções**: Evitar repetir ofertas já enviadas anteriormente
+- **Novos marketplaces**: Kabum, Pichau, Terabyte

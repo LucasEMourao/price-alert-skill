@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
 
+"""Fetch Mercado Livre Brasil search result prices.
+
+Uses regex-based extraction on the HTML returned by the scrape server.
+The ML page structure uses aria-labels for prices:
+  - aria-label="Agora: X reais com Y centavos" for current price
+  - aria-label="Antes: X reais" for original/strikethrough price
+"""
+
 import argparse
 import json
 import re
 from datetime import datetime, timezone
-from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
 
-def parse_brl_amount(text: str | None) -> float | None:
+def parse_brl_from_label(text: str | None) -> float | None:
+    """Parse price from ML aria-label like 'Agora: 206 reais com 64 centavos' or 'Antes: 299 reais'."""
     if not text:
         return None
-    match = re.search(r"R\$\s*([\d\.\,]+)", text)
+    # Match patterns like "206 reais com 64 centavos" or "299 reais"
+    match = re.search(r"([\d]+)\s*reais(?:\s*com\s*([\d]+)\s*centavos)?", text, re.IGNORECASE)
     if not match:
         return None
-    normalized = match.group(1).replace(".", "").replace(",", ".")
-    try:
-        return float(normalized)
-    except ValueError:
-        return None
-
-
-def first_brl_text(text: str | None) -> str | None:
-    if not text:
-        return None
-    match = re.search(r"R\$\s*[\d\.]+(?:,\d{2})?", text)
-    return match.group(0) if match else None
+    reais = int(match.group(1))
+    centavos = int(match.group(2)) if match.group(2) else 0
+    return reais + centavos / 100
 
 
 def compute_confidence(product: dict[str, Any]) -> float:
@@ -41,119 +41,74 @@ def compute_confidence(product: dict[str, Any]) -> float:
     return round(score, 2)
 
 
-class MercadoLivreSearchHTMLParser(HTMLParser):
-    def __init__(self, max_results: int) -> None:
-        super().__init__()
-        self.max_results = max_results
-        self.products: list[dict[str, Any]] = []
-        self.current: dict[str, Any] | None = None
-        self.card_depth = 0
-        self.current_field: str | None = None
-        self.link_stack: list[str] = []
+def extract_products_from_html(html: str, max_results: int) -> list[dict[str, Any]]:
+    """Extract products from ML search page using regex."""
+    products = []
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        attr_map = dict(attrs)
-        classes = attr_map.get("class", "")
+    # Split by product wrapper
+    wrappers = list(re.finditer(r'ui-search-result__wrapper', html))
 
-        if (
-            tag == "li"
-            and "ui-search-layout__item" in classes
-            and len(self.products) < self.max_results
-        ):
-            self.current = {
-                "position": len(self.products) + 1,
-                "asin": attr_map.get("data-id"),
-                "title": None,
-                "url": None,
-                "image_url": None,
-                "price_text": None,
-                "price": None,
-                "list_price_text": None,
-                "list_price": None,
-                "rating_text": None,
-                "rating": None,
-                "review_count": None,
-                "is_sponsored": False,
-                "availability": "unknown",
-                "_text_parts": [],
-            }
-            self.card_depth = 1
-            self.current_field = None
-            self.link_stack = []
-            return
+    for idx, wrapper_match in enumerate(wrappers):
+        if len(products) >= max_results:
+            break
 
-        if not self.current:
-            return
+        start = wrapper_match.start()
+        end = wrappers[idx + 1].start() if idx + 1 < len(wrappers) else start + 4000
+        card = html[start:end]
 
-        if tag == "li":
-            self.card_depth += 1
+        # Title
+        title_match = re.search(r'poly-component__title[^>]*>([^<]+)', card)
+        if not title_match:
+            continue
+        title = title_match.group(1).strip()
+        if not title or len(title) < 3:
+            continue
 
-        if tag == "a":
-            href = attr_map.get("href", "")
-            self.link_stack.append(href)
-            if (
-                self.current.get("url") is None
-                and href.startswith("http")
-                and "mercadolivre.com.br" in href
-                and "click1.mercadolivre.com.br" not in href
-            ):
-                self.current["url"] = href
-                self.current_field = "title"
-            if "click1.mercadolivre.com.br" in href:
-                self.current["is_sponsored"] = True
+        # Current price from "Agora:" aria-label
+        agora_match = re.search(r'aria-label="Agora:\s*([^"]+)"', card)
+        current_price = parse_brl_from_label(agora_match.group(1)) if agora_match else None
 
-        if tag == "img" and self.current.get("image_url") is None:
-            image = attr_map.get("data-src") or attr_map.get("src")
-            if image and image.startswith("http"):
-                self.current["image_url"] = image
+        # Original price from "Antes:" aria-label
+        antes_match = re.search(r'aria-label="Antes:\s*([^"]+)"', card)
+        list_price = parse_brl_from_label(antes_match.group(1)) if antes_match else None
 
-    def handle_endtag(self, tag: str) -> None:
-        if not self.current:
-            return
+        # Image
+        img_match = re.search(r'poly-component__picture[^>]*src="([^"]+)"', card)
+        image_url = img_match.group(1) if img_match else None
 
-        if tag == "li":
-            self.card_depth -= 1
-            if self.card_depth == 0:
-                full_text = " ".join(self.current.pop("_text_parts", []))
-                price_text = first_brl_text(full_text)
-                if price_text:
-                    self.current["price_text"] = price_text
-                    self.current["price"] = parse_brl_amount(price_text)
-                if not self.current.get("asin") and self.current.get("url"):
-                    match = re.search(r"/(MLB[A-Z]?\d+)", self.current["url"])
-                    if match:
-                        self.current["asin"] = match.group(1)
-                if self.current.get("title") and self.current.get("url"):
-                    self.products.append(self.current)
-                self.current = None
-                self.current_field = None
-                self.link_stack = []
-                return
+        # Extract MLB ID from image URL or card content
+        mlb_match = re.search(r'(MLB[A-Z]?\d+)', card)
+        asin = mlb_match.group(1) if mlb_match else None
 
-        if tag == "a":
-            if self.link_stack:
-                self.link_stack.pop()
-            self.current_field = None
+        # Product link — ML uses click1.mercadolivre.com.br tracking URLs
+        # Construct real URL from MLB ID
+        url = None
+        if asin:
+            mlb_clean = re.search(r'(MLB\d+)', asin)
+            if mlb_clean:
+                url = f"https://produto.mercadolivre.com.br/{mlb_clean.group(1)}"
 
-        if tag == "span":
-            self.current_field = None
+        # Sponsored detection
+        is_sponsored = 'is_advertising=true' in card or 'type=pad' in card
 
-    def handle_data(self, data: str) -> None:
-        if not self.current:
-            return
+        products.append({
+            "position": len(products) + 1,
+            "asin": asin,
+            "title": title,
+            "url": url,
+            "image_url": image_url,
+            "price_text": f"R$ {current_price:.2f}".replace(".", ",") if current_price else None,
+            "price": current_price,
+            "list_price_text": f"R$ {list_price:.2f}".replace(".", ",") if list_price else None,
+            "list_price": list_price,
+            "rating_text": None,
+            "rating": None,
+            "review_count": None,
+            "is_sponsored": is_sponsored,
+            "availability": "unknown",
+        })
 
-        text = data.strip()
-        if not text:
-            return
-
-        if "Patrocinado" in text:
-            self.current["is_sponsored"] = True
-
-        self.current["_text_parts"].append(text)
-
-        if self.current_field == "title" and self.current.get("title") is None and len(text) > 3:
-            self.current["title"] = text
-            return
+    return products
 
 
 def fetch_html_via_steel(
@@ -201,9 +156,9 @@ def normalize_products(raw_products: list[dict[str, Any]]) -> list[dict[str, Any
             "url": raw.get("url"),
             "image_url": raw.get("image_url"),
             "price_text": raw.get("price_text"),
-            "price": parse_brl_amount(raw.get("price_text")),
-            "list_price_text": None,
-            "list_price": None,
+            "price": raw.get("price"),
+            "list_price_text": raw.get("list_price_text"),
+            "list_price": raw.get("list_price"),
             "rating_text": None,
             "rating": None,
             "review_count": None,
@@ -241,12 +196,11 @@ def run(
     try:
         body = fetch_html_via_steel(search_url, api_base, scrape_endpoint, timeout_seconds, delay_ms)
         html = extract_html_from_response(body)
-        parser = MercadoLivreSearchHTMLParser(max_results=max_results)
-        parser.feed(html)
-        payload["products"] = normalize_products(parser.products)
+        raw_products = extract_products_from_html(html, max_results)
+        payload["products"] = normalize_products(raw_products)
         if not payload["products"]:
             payload["errors"].append(
-                "No Mercado Livre products extracted. Confirm the Steel scrape endpoint returns result-card HTML."
+                "No Mercado Livre products extracted. Confirm the scrape endpoint returns result-card HTML."
             )
     except Exception as exc:  # noqa: BLE001
         payload["errors"].append(f"{type(exc).__name__}: {exc}")
@@ -255,13 +209,13 @@ def run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch Mercado Livre Brasil search result prices via Steel API.")
+    parser = argparse.ArgumentParser(description="Fetch Mercado Livre Brasil search result prices.")
     parser.add_argument("query", help="Search query to run against mercadolivre.com.br")
-    parser.add_argument("--api-base", default="http://localhost:3000", help="Steel API base URL")
-    parser.add_argument("--scrape-endpoint", default="/v1/scrape", help="Steel scrape endpoint path")
+    parser.add_argument("--api-base", default="http://localhost:3000", help="Scrape API base URL")
+    parser.add_argument("--scrape-endpoint", default="/v1/scrape", help="Scrape endpoint path")
     parser.add_argument("--max-results", type=int, default=20, help="Maximum number of product cards to return")
     parser.add_argument("--timeout-seconds", type=int, default=30, help="HTTP timeout for the scrape request")
-    parser.add_argument("--delay-ms", type=int, default=2500, help="Extra wait requested from Steel before capture")
+    parser.add_argument("--delay-ms", type=int, default=2500, help="Extra wait requested before capture")
     args = parser.parse_args()
 
     result = run(

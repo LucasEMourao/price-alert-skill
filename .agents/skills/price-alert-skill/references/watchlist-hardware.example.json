@@ -1,8 +1,0 @@
-{
-    "name": "Hardware deals",
-    "categories": ["ssd 2tb", "placa de video", "memoria ddr5"],
-    "marketplaces": ["amazon_br", "mercadolivre_br"],
-    "update_interval_minutes": 30,
-    "target_price": 1800,
-    "notes": "Track good deals for PC upgrades."
-}
