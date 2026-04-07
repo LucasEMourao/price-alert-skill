@@ -19,7 +19,11 @@ from typing import Any
 
 from fetch_amazon_br import run as run_amazon
 from fetch_mercadolivre_br import run as run_mercadolivre
-from utils import calculate_discount, format_deal_message
+from utils import (
+    calculate_discount,
+    filter_new_deals,
+    format_deal_message,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 MESSAGES_DIR = ROOT / "data" / "messages"
@@ -145,7 +149,7 @@ def main() -> None:
 
     deals = scan_all(args.api_base, args.max_results, args.min_discount, marketplaces, queries)
 
-    # Deduplicate by URL
+    # Deduplicate by URL (within this run)
     seen_urls = set()
     unique_deals = []
     for deal in deals:
@@ -153,7 +157,13 @@ def main() -> None:
             seen_urls.add(deal["url"])
             unique_deals.append(deal)
 
-    print(f"\nTotal unique deals: {len(unique_deals)}")
+    # Deduplicate against previously sent deals (cross-session)
+    unique_deals, sent_data = filter_new_deals(unique_deals, auto_save=True)
+    skipped = len(deals) - len(unique_deals)
+    if skipped > 0:
+        print(f"Skipped {skipped} already-sent deals")
+
+    print(f"\nTotal new deals: {len(unique_deals)}")
 
     # Format messages
     messages = []

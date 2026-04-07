@@ -2,6 +2,9 @@
 
 """Shared utilities for the price-alert-skill."""
 
+import hashlib
+import json
+from pathlib import Path
 from typing import Any
 
 
@@ -111,3 +114,76 @@ def format_deal_message(deal: dict[str, Any]) -> str:
     ])
 
     return "\n".join(lines)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SENT_DEALS_FILE = ROOT / "data" / "sent_deals.json"
+DEDUP_RETENTION_DAYS = 7
+
+
+def deal_fingerprint(deal: dict[str, Any]) -> str:
+    """Generate a unique fingerprint for a deal based on URL and price."""
+    raw = f"{deal['url']}|{deal['current_price']}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def load_sent_deals() -> dict[str, Any]:
+    """Load sent deals from disk, return empty structure if missing."""
+    if SENT_DEALS_FILE.exists():
+        return json.loads(SENT_DEALS_FILE.read_text())
+    return {"sent": {}, "last_cleaned": None}
+
+
+def save_sent_deals(data: dict[str, Any]) -> None:
+    """Persist sent deals to disk."""
+    SENT_DEALS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SENT_DEALS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def clean_old_deals(data: dict[str, Any], max_age_days: int = DEDUP_RETENTION_DAYS) -> dict[str, Any]:
+    """Remove deals older than max_age_days."""
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    cutoff_ts = cutoff.isoformat()
+
+    cleaned = {
+        url: ts
+        for url, ts in data.get("sent", {}).items()
+        if ts >= cutoff_ts
+    }
+    data["sent"] = cleaned
+    data["last_cleaned"] = datetime.now(timezone.utc).isoformat()
+    return data
+
+
+def filter_new_deals(
+    deals: list[dict[str, Any]],
+    sent_data: dict[str, Any] | None = None,
+    auto_save: bool = True,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Filter out deals already sent in previous runs.
+
+    Returns (new_deals, updated_sent_data).
+    """
+    from datetime import datetime, timezone
+
+    if sent_data is None:
+        sent_data = load_sent_deals()
+
+    sent_data = clean_old_deals(sent_data)
+    sent_urls = set(sent_data.get("sent", {}).keys())
+
+    new_deals = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    for deal in deals:
+        url = deal["url"]
+        if url not in sent_urls:
+            sent_data["sent"][url] = now
+            new_deals.append(deal)
+
+    if auto_save:
+        save_sent_deals(sent_data)
+
+    return new_deals, sent_data
