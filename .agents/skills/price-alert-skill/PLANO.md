@@ -85,13 +85,18 @@ python3 scan_deals.py --all --min-discount 10
 ## Próximos Passos
 
 ### Passo 1: Implementar envio automático para WhatsApp
-**Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web.
+**Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web, com a mensagem como legenda da imagem para melhor experiência do usuário.
 
-**Estratégia escolhida: Imagem como mídia (Opção 1)**
+**Estratégia escolhida: Imagem com legenda (melhor experiência)**
 1. Baixar imagem do produto antes de enviar
-2. Enviar a imagem como mídia no WhatsApp Web (via Selenium/Playwright)
-3. Enviar a mensagem de texto logo em seguida
-4. Repetir para cada produto
+2. Enviar a imagem como mídia no WhatsApp Web (via Selenium/Playwright) **com a mensagem formatada como legenda**
+3. Repetir para cada produto
+
+**Benefícios desta abordagem:**
+- Experiência mais natural no WhatsApp (como quando enviamos fotos com legenda manualmente)
+- Apenas uma notificação em vez de duas
+- Imagem e texto permanecem visualmente agrupados
+- Link na legenda ainda gera preview automaticamente no WhatsApp
 
 **Arquivos a criar:**
 - `scripts/send_to_whatsapp.py` — script de envio via WhatsApp Web
