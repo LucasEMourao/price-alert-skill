@@ -28,7 +28,11 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
     ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
     ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (extrai list_price)
     ├── fetch_mercadolivre_br.py     # Fetcher Mercado Livre (extrai list_price)
-    └── utils.py                     # Funções compartilhadas (emojis, formatação, templates)
+    ├── utils.py                     # Funções compartilhadas (emojis, formatação, templates, dedup)
+    └── tests/                       # Testes unitários
+        ├── test_utils.py            # Testes de utils (66 testes no total)
+        ├── test_amazon.py           # Testes do parser Amazon
+        └── test_mercadolivre.py     # Testes do parser ML
 ```
 
 ## Dependências
@@ -69,6 +73,13 @@ python3 scan_deals.py --all --marketplaces amazon_br --min-discount 15
 
 ### 4. Resultado
 As mensagens são salvas em `data/messages/deals_YYYYMMDD_HHMMSS.json` e exibidas no terminal, prontas para copiar para WhatsApp.
+Ofertas já enviadas em execuções anteriores são automaticamente filtradas via `data/sent_deals.json`.
+
+### 5. Rodar testes
+```bash
+cd .agents/skills/price-alert-skill/scripts
+python3 -m pytest tests/ -v
+```
 
 ## Decisões tomadas
 
@@ -105,6 +116,15 @@ As mensagens são salvas em `data/messages/deals_YYYYMMDD_HHMMSS.json` e exibida
 - Preço atual (Hoje:) exibido abaixo.
 - Link do produto no final (WhatsApp gera preview com imagem automaticamente).
 
+### 9. Deduplicação cross-session
+- `data/sent_deals.json` armazena URLs de ofertas já processadas.
+- Limpeza automática de ofertas com mais de 7 dias.
+- Integrado no `scan_deals.py` — filtra antes de formatar mensagens.
+
+### 10. Testes automatizados
+- 66 testes unitários cobrindo utils, parser Amazon e parser ML.
+- Rodar com: `python3 -m pytest tests/ -v`
+
 ```
 {emoji} OFERTA DO DIA 👇
 
@@ -120,7 +140,7 @@ As mensagens são salvas em `data/messages/deals_YYYYMMDD_HHMMSS.json` e exibida
 🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
 
-## Status dos marketplaces (02/04/2026)
+## Status dos marketplaces (07/04/2026)
 | Marketplace | Status | Observação |
 |---|---|---|
 | Amazon BR | Funcionando | Extrai preço atual + preço anterior riscado |

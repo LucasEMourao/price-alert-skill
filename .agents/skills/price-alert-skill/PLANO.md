@@ -50,6 +50,9 @@ python3 scan_deals.py --all --min-discount 10
 | Formato das mensagens | Template com preço antigo riscado (`~~...~~`) acima do preço atual |
 | Categorias gamer | 12 queries de busca configuradas em `scan_deals.py` |
 | Código consolidado | `utils.py` com funções compartilhadas |
+| Deduplicação cross-session | `sent_deals.json` — evita repetir ofertas entre execuções (limpeza automática a cada 7 dias) |
+| Dependências | `requirements.txt` com fastapi, uvicorn, playwright |
+| Testes automatizados | 66 testes unitários (utils, Amazon parser, ML parser) |
 | Zoom/Shopee/SQLite | Removidos (pipeline legado descartado) |
 
 ---
@@ -97,16 +100,6 @@ python3 scan_deals.py --all --min-discount 10
 - `selenium` ou `pywhatkit` para automação do WhatsApp Web
 - `requests` ou `httpx` para download das imagens
 
-### Passo 2: Implementar deduplicação
-**Objetivo:** Evitar repetir ofertas já enviadas anteriormente.
-
-**Estratégia:**
-- Armazenar hash/fingerprint das ofertas enviadas em arquivo simples (JSON)
-- Antes de enviar, verificar se a oferta já foi enviada
-- Limpar histórico automaticamente após N dias
-
-**Arquivo:** `data/sent_deals.json`
-
 ---
 
 ## Categorias Monitoradas
@@ -136,6 +129,9 @@ Configuradas em `scan_deals.py` (variável `GAMER_QUERIES`):
 5. **Parser Mercado Livre reescrito** — HTML mudou; agora usa `aria-label` para preços
 6. **Preço antigo riscado acima** — Formato mais intuitivo visualmente
 7. **Imagem via link** — Link do produto no final gera preview automático no WhatsApp
+8. **Código Shopee removido** — ~225 linhas de endpoints de sessão/login removidos do scrape_server.py
+9. **Deduplicação cross-session** — `sent_deals.json` com limpeza automática (7 dias)
+10. **Testes automatizados** — 66 testes unitários para parsers e utils
 
 ---
 
