@@ -49,7 +49,7 @@ def detect_category_emoji(title: str, query: str) -> str:
 
 
 def format_price_brl(value: float) -> str:
-    """Format price as R$ XXXX.XX (dot as decimal separator)."""
+    """Format price as R$ X.XXX,XX (Brazilian convention)."""
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 

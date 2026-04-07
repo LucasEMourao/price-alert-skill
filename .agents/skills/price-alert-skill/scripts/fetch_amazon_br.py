@@ -291,7 +291,7 @@ def run(
         payload["products"] = normalize_products(parser.products)
         if not payload["products"]:
             payload["errors"].append(
-                "No Amazon products extracted. Confirm the Steel scrape endpoint returns HTML for the requested URL."
+                "No Amazon products extracted. Confirm the scrape endpoint returns HTML for the requested URL."
             )
     except Exception as exc:  # noqa: BLE001
         payload["errors"].append(f"{type(exc).__name__}: {exc}")
