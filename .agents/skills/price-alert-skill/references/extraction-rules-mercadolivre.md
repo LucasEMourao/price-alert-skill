@@ -8,26 +8,28 @@ Use Mercado Livre Brasil search:
 https://lista.mercadolivre.com.br/{query}
 ```
 
-with spaces normalized to hyphens.
+with spaces normalized to hyphens (e.g., `mouse-gamer`).
 
 ## Primary result selector
 
-Mercado Livre commonly uses result cards like:
+Mercado Livre uses result cards:
 
 ```text
-li.ui-search-layout__item
+div.ui-search-result__wrapper
 ```
 
 ## Preferred fields
 
-- Title: card heading/link text
-- URL: product link pointing to `/MLB-...`
-- Image: `img`
-- Price: current integer and decimal fragments near `andes-money-amount`
-- Review count and rating: optional, often absent in search cards
+- Title: `poly-component__title` link text
+- URL: construct from MLB ID → `https://produto.mercadolivre.com.br/{MLB-ID}`
+- Image: `poly-component__picture` src
+- Current price: `aria-label="Agora: X reais com Y centavos"`
+- List price: `aria-label="Antes: X reais"`
+- MLB ID: extracted from card content via `(MLB[A-Z]?\d+)`
 
 ## Stability guidance
 
-- Sponsored cards should still be captured, but labeled when visible.
-- Mercado Livre HTML varies between list/grid layouts. Prefer broad class detection rather than exact nesting assumptions.
-- If the scrape payload contains no expected list items, return a descriptive error instead of inventing products.
+- Sponsored cards should still be captured, but labeled when visible (`is_advertising=true` or `type=pad`).
+- ML HTML structure changed from `li.ui-search-layout__item` to `div.ui-search-result__wrapper`. Always use the wrapper class.
+- Price values are parsed from aria-labels in Portuguese (e.g., "206 reais com 64 centavos").
+- If the scrape payload contains no expected wrappers, return a descriptive error instead of inventing products.
