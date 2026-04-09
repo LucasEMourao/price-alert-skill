@@ -44,15 +44,16 @@ python3 scan_deals.py --all --min-discount 10
 | Item | Descrição |
 |---|---|
 | Servidor de scraping | `scrape_server.py` com Playwright + stealth (substitui Steel Browser) |
-| Fetcher Amazon | Extrai preço atual + preço anterior riscado (`list_price`) |
+| Fetcher Amazon | Extrai preço atual + preço anterior riscado (`list_price`) + **gera link afiliado automaticamente** |
 | Fetcher Mercado Livre | Parser reescrito para nova estrutura HTML — extrai preço atual + preço anterior riscado |
 | Script principal | `scan_deals.py` — busca ofertas e gera mensagens WhatsApp |
 | Formato das mensagens | Template com preço antigo riscado (`~~...~~`) acima do preço atual |
 | Categorias gamer | 12 queries de busca configuradas em `scan_deals.py` |
 | Código consolidado | `utils.py` com funções compartilhadas |
 | Deduplicação cross-session | `sent_deals.json` — evita repetir ofertas entre execuções (limpeza automática a cada 7 dias) |
+| **Links afiliados Amazon** | `config.py` + `build_affiliate_url()` em `fetch_amazon_br.py` — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` |
 | Dependências | `requirements.txt` com fastapi, uvicorn, playwright |
-| Testes automatizados | 66 testes unitários (utils, Amazon parser, ML parser) |
+| Testes automatizados | 75 testes unitários (utils, Amazon parser + afiliados, ML parser) |
 | Zoom/Shopee/SQLite | Removidos (pipeline legado descartado) |
 
 ---
@@ -84,7 +85,16 @@ python3 scan_deals.py --all --min-discount 10
 
 ## Próximos Passos
 
-### Passo 1: Implementar envio automático para WhatsApp
+### Passo 1: Implementar links afiliados Mercado Livre
+**Status:** Pendente — aguardando teste de formato de URL
+
+Para implementar, é necessário:
+1. Testar se `produto.mercadolivre.com.br/MLB_ID?matt_word=...&matt_tool=...` funciona (pode perder parâmetros no redirect)
+2. Se não funcionar, experimentar formato alternativo (`www.mercadolivre.com.br/p/MLB_ID?matt_word=...`)
+3. Implementar `build_affiliate_url()` em `fetch_mercadolivre_br.py`
+4. Configurar `ML_MATT_WORD` e `ML_MATT_TOOL` em `config.py`
+
+### Passo 2: Implementar envio automático para WhatsApp
 **Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web, com a mensagem como legenda da imagem para melhor experiência do usuário.
 
 **Estratégia escolhida: Imagem com legenda (melhor experiência)**
@@ -136,7 +146,8 @@ Configuradas em `scan_deals.py` (variável `GAMER_QUERIES`):
 7. **Imagem via link** — Link do produto no final gera preview automático no WhatsApp
 8. **Código Shopee removido** — ~225 linhas de endpoints de sessão/login removidos do scrape_server.py
 9. **Deduplicação cross-session** — `sent_deals.json` com limpeza automática (7 dias)
-10. **Testes automatizados** — 66 testes unitários para parsers e utils
+10. **Testes automatizados** — 75 testes unitários para parsers, utils e geração de links afiliados
+11. **Links afiliados Amazon BR** — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` via `build_affiliate_url()`
 
 ---
 

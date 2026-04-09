@@ -24,14 +24,15 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
 │   ├── extraction-rules-mercadolivre.md  # Regras de parsing ML
 │   └── output-schema.md             # Schema de saída dos fetchers
 └── scripts/
+    ├── config.py                   # Configuração (tags de afiliado)
     ├── scrape_server.py             # Servidor Playwright (substitui Steel Browser)
     ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
-    ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (extrai list_price)
+    ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (extrai list_price + gera link afiliado)
     ├── fetch_mercadolivre_br.py     # Fetcher Mercado Livre (extrai list_price)
     ├── utils.py                     # Funções compartilhadas (emojis, formatação, templates, dedup)
     └── tests/                       # Testes unitários
-        ├── test_utils.py            # Testes de utils (66 testes no total)
-        ├── test_amazon.py           # Testes do parser Amazon
+        ├── test_utils.py            # Testes de utils
+        ├── test_amazon.py           # Testes do parser Amazon (inclui build_affiliate_url)
         └── test_mercadolivre.py     # Testes do parser ML
 ```
 
@@ -122,8 +123,20 @@ python3 -m pytest tests/ -v
 - Integrado no `scan_deals.py` — filtra antes de formatar mensagens.
 
 ### 10. Testes automatizados
-- 66 testes unitários cobrindo utils, parser Amazon e parser ML.
+- 75 testes unitários cobrindo utils, parser Amazon (incluindo geração de links afiliados) e parser ML.
 - Rodar com: `python3 -m pytest tests/ -v`
+
+### 11. Links afiliados — Amazon BR (implementado)
+- URLs da Amazon são automaticamente convertidas para links de afiliado usando `?tag=brunoentende-20`.
+- Formato gerado: `https://www.amazon.com.br/dp/{ASIN}?tag=brunoentende-20`
+- O ASIN é extraído do `data-asin` do card do produto. URLs longas com `ref=`, `linkCode`, `linkId` são sanitizadas para o formato limpo `/dp/{ASIN}?tag=XXX`.
+- Tag configurável via variável de ambiente `AMAZON_AFFILIATE_TAG` (default: `brunoentende-20`) ou editando `scripts/config.py`.
+- Implementação: função `build_affiliate_url()` em `fetch_amazon_br.py` + `config.py`.
+
+### 12. Links afiliados — Mercado Livre (pendente)
+- Formato ML usa parâmetros `matt_word` e `matt_tool` (ex: `?matt_word=USERNAME&matt_tool=TOOLID`).
+- Variáveis de ambiente `ML_MATT_WORD` e `ML_MATT_TOOL` serão adicionadas em `config.py` quando implementado.
+- **Pendente**: testar formato de URL e garantir que parâmetros de afiliado sobrevivam ao redirect do ML.
 
 ```
 {emoji} OFERTA DO DIA 👇
@@ -140,12 +153,12 @@ python3 -m pytest tests/ -v
 🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
 
-## Status dos marketplaces (07/04/2026)
-| Marketplace | Status | Observação |
-|---|---|---|
-| Amazon BR | Funcionando | Extrai preço atual + preço anterior riscado |
-| Mercado Livre | Funcionando | Extrai preço atual + preço anterior riscado |
-| Shopee BR | Descartada | Proteção anti-bot inviabiliza uso |
+## Status dos marketplaces (09/04/2026)
+| Marketplace | Status | Links afiliados | Observação |
+|---|---|---|---|
+| Amazon BR | Funcionando | Automático (`?tag=brunoentende-20`) | Extrai preço atual + preço anterior riscado |
+| Mercado Livre | Funcionando | Pendente | Extrai preço atual + preço anterior riscado, links limpos por enquanto |
+| Shopee BR | Descartada | N/A | Proteção anti-bot inviabiliza uso |
 
 ## Comandos úteis
 ```bash

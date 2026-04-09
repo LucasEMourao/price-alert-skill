@@ -1,9 +1,12 @@
 """Tests for Amazon BR fetcher parser."""
 
 import json
+from unittest.mock import patch
 
 from fetch_amazon_br import (
     AmazonSearchHTMLParser,
+    build_affiliate_url,
+    normalize_products,
     parse_brl_amount,
     parse_rating,
     parse_review_count,
@@ -117,3 +120,82 @@ class TestAmazonSearchHTMLParser:
 
         assert len(parser.products) == 1
         assert parser.products[0]["is_sponsored"] is True
+
+
+class TestBuildAffiliateUrl:
+    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "brunoentende-20")
+    def test_builds_affiliate_url_from_asin(self):
+        url = build_affiliate_url("B07GTTRBLV", None)
+        assert url == "https://www.amazon.com.br/dp/B07GTTRBLV?tag=brunoentende-20"
+
+    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "brunoentende-20")
+    def test_builds_affiliate_url_from_raw_url_with_asin(self):
+        url = build_affiliate_url(None, "https://www.amazon.com.br/Some-Product/dp/B07GTTRBLV/ref=cm_sw_r_api?ie=UTF8")
+        assert url == "https://www.amazon.com.br/dp/B07GTTRBLV?tag=brunoentende-20"
+
+    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "brunoentende-20")
+    def test_prefers_asin_over_raw_url(self):
+        url = build_affiliate_url("B09XXXXXXX", "https://www.amazon.com.br/dp/B07GTTRBLV")
+        assert url == "https://www.amazon.com.br/dp/B09XXXXXXX?tag=brunoentende-20"
+
+    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "brunoentende-20")
+    def test_falls_back_to_raw_url_when_no_asin(self):
+        url = build_affiliate_url(None, "https://www.amazon.com.br/some-path")
+        assert url == "https://www.amazon.com.br/some-path"
+
+    def test_returns_none_when_no_asin_or_url(self):
+        url = build_affiliate_url(None, None)
+        assert url is None
+
+    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "")
+    def test_returns_raw_url_when_tag_empty(self):
+        url = build_affiliate_url(None, "https://www.amazon.com.br/dp/B07GTTRBLV?old=params")
+        assert url == "https://www.amazon.com.br/dp/B07GTTRBLV?old=params"
+
+    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "")
+    def test_returns_none_when_tag_empty_and_no_url(self):
+        url = build_affiliate_url("B07GTTRBLV", None)
+        assert url is None
+
+
+class TestNormalizeProductsWithAffiliate:
+    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "brunoentende-20")
+    def test_affiliate_url_applied_in_normalize(self):
+        raw = [
+            {
+                "position": 1,
+                "asin": "B07GTTRBLV",
+                "title": "Mouse Gamer Redragon",
+                "url": "https://www.amazon.com.br/Mouse-Gamer-Redragon/dp/B07GTTRBLV/ref=cm_sw_r_api",
+                "image_url": None,
+                "price_text": "R$ 149,90",
+                "list_price_text": None,
+                "rating_text": None,
+                "review_count_text": None,
+                "is_sponsored": False,
+                "availability": "unknown",
+            }
+        ]
+        products = normalize_products(raw)
+        assert len(products) == 1
+        assert products[0]["url"] == "https://www.amazon.com.br/dp/B07GTTRBLV?tag=brunoentende-20"
+
+    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "brunoentende-20")
+    def test_affiliate_url_when_no_asin_but_url_has_dp(self):
+        raw = [
+            {
+                "position": 1,
+                "asin": None,
+                "title": "Produto Qualquer",
+                "url": "https://www.amazon.com.br/gp/product/B09XYZ1234",
+                "image_url": None,
+                "price_text": "R$ 99,00",
+                "list_price_text": None,
+                "rating_text": None,
+                "review_count_text": None,
+                "is_sponsored": False,
+                "availability": "unknown",
+            }
+        ]
+        products = normalize_products(raw)
+        assert products[0]["url"] == "https://www.amazon.com.br/dp/B09XYZ1234?tag=brunoentende-20"

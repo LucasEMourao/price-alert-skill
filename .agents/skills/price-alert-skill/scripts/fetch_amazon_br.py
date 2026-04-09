@@ -10,6 +10,8 @@ from typing import Any
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
+from config import AMAZON_AFFILIATE_TAG
+
 
 def parse_brl_amount(text: str | None) -> float | None:
     if not text:
@@ -234,6 +236,18 @@ def extract_html_from_response(body: str) -> str:
     return body
 
 
+def build_affiliate_url(asin: str | None, raw_url: str | None) -> str | None:
+    if asin and AMAZON_AFFILIATE_TAG:
+        return f"https://www.amazon.com.br/dp/{asin}?tag={AMAZON_AFFILIATE_TAG}"
+    if raw_url and AMAZON_AFFILIATE_TAG:
+        asin_match = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", raw_url)
+        if asin_match:
+            return f"https://www.amazon.com.br/dp/{asin_match.group(1)}?tag={AMAZON_AFFILIATE_TAG}"
+    if raw_url:
+        return raw_url
+    return None
+
+
 def normalize_products(raw_products: list[dict[str, Any]]) -> list[dict[str, Any]]:
     products: list[dict[str, Any]] = []
     for raw in raw_products:
@@ -241,7 +255,7 @@ def normalize_products(raw_products: list[dict[str, Any]]) -> list[dict[str, Any
             "position": raw["position"],
             "asin": raw.get("asin"),
             "title": raw.get("title"),
-            "url": raw.get("url"),
+            "url": build_affiliate_url(raw.get("asin"), raw.get("url")),
             "image_url": raw.get("image_url"),
             "price_text": raw.get("price_text"),
             "price": parse_brl_amount(raw.get("price_text")),

@@ -218,10 +218,12 @@ class TestFilterNewDeals:
             assert "https://example.com/p2" in sent_data["sent"]
 
     def test_duplicate_deals_filtered(self, tmp_path):
+        from datetime import datetime, timezone
         test_file = tmp_path / "sent_deals.json"
+        recent_ts = datetime.now(timezone.utc).isoformat()
         with patch("utils.SENT_DEALS_FILE", test_file):
             existing = {
-                "sent": {"https://example.com/p1": "2026-04-01T00:00:00"},
+                "sent": {"https://example.com/p1": recent_ts},
                 "last_cleaned": None,
             }
             deals = [
@@ -234,12 +236,14 @@ class TestFilterNewDeals:
             assert new_deals[0]["url"] == "https://example.com/p2"
 
     def test_all_duplicates(self, tmp_path):
+        from datetime import datetime, timezone
         test_file = tmp_path / "sent_deals.json"
+        recent_ts = datetime.now(timezone.utc).isoformat()
         with patch("utils.SENT_DEALS_FILE", test_file):
             existing = {
                 "sent": {
-                    "https://example.com/p1": "2026-04-01T00:00:00",
-                    "https://example.com/p2": "2026-04-01T00:00:00",
+                    "https://example.com/p1": recent_ts,
+                    "https://example.com/p2": recent_ts,
                 },
                 "last_cleaned": None,
             }
