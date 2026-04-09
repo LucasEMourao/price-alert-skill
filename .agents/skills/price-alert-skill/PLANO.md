@@ -45,15 +45,16 @@ python3 scan_deals.py --all --min-discount 10
 |---|---|
 | Servidor de scraping | `scrape_server.py` com Playwright + stealth (substitui Steel Browser) |
 | Fetcher Amazon | Extrai preço atual + preço anterior riscado (`list_price`) + **gera link afiliado automaticamente** |
-| Fetcher Mercado Livre | Parser reescrito para nova estrutura HTML — extrai preço atual + preço anterior riscado |
+| Fetcher Mercado Livre | Parser reescrito para nova estrutura HTML — extrai preço atual + preço anterior riscado + **gera link afiliado** |
 | Script principal | `scan_deals.py` — busca ofertas e gera mensagens WhatsApp |
 | Formato das mensagens | Template com preço antigo riscado (`~~...~~`) acima do preço atual |
 | Categorias gamer | 12 queries de busca configuradas em `scan_deals.py` |
 | Código consolidado | `utils.py` com funções compartilhadas |
 | Deduplicação cross-session | `sent_deals.json` — evita repetir ofertas entre execuções (limpeza automática a cada 7 dias) |
 | **Links afiliados Amazon** | `config.py` + `build_affiliate_url()` em `fetch_amazon_br.py` — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` |
+| **Links afiliados ML** | `config.py` + `build_affiliate_url()` em `fetch_mercadolivre_br.py` — URLs com `?matt_word=tb20240811145500&matt_tool=21915026` (formato `/p/MLB_ID`) |
 | Dependências | `requirements.txt` com fastapi, uvicorn, playwright |
-| Testes automatizados | 75 testes unitários (utils, Amazon parser + afiliados, ML parser) |
+| Testes automatizados | 79 testes unitários (utils, Amazon parser + afiliados, ML parser + afiliados) |
 | Zoom/Shopee/SQLite | Removidos (pipeline legado descartado) |
 
 ---
@@ -85,14 +86,10 @@ python3 scan_deals.py --all --min-discount 10
 
 ## Próximos Passos
 
-### Passo 1: Implementar links afiliados Mercado Livre
-**Status:** Pendente — aguardando teste de formato de URL
-
-Para implementar, é necessário:
-1. Testar se `produto.mercadolivre.com.br/MLB_ID?matt_word=...&matt_tool=...` funciona (pode perder parâmetros no redirect)
-2. Se não funcionar, experimentar formato alternativo (`www.mercadolivre.com.br/p/MLB_ID?matt_word=...`)
-3. Implementar `build_affiliate_url()` em `fetch_mercadolivre_br.py`
-4. Configurar `ML_MATT_WORD` e `ML_MATT_TOOL` em `config.py`
+### Passo 1: ~~Implementar links afiliados~~ ✅ Concluído
+- **Amazon BR**: Links afiliados gerados automaticamente via `?tag=brunoentende-20`
+- **Mercado Livre**: Links afiliados gerados automaticamente via `?matt_word=tb20240811145500&matt_tool=21915026`
+- **Correção ML**: URL base alterada de `produto.mercadolivre.com.br/MLB_ID` (404) para `www.mercadolivre.com.br/p/MLB_ID` (redirect 301 preserva query params)
 
 ### Passo 2: Implementar envio automático para WhatsApp
 **Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web, com a mensagem como legenda da imagem para melhor experiência do usuário.
@@ -148,6 +145,8 @@ Configuradas em `scan_deals.py` (variável `GAMER_QUERIES`):
 9. **Deduplicação cross-session** — `sent_deals.json` com limpeza automática (7 dias)
 10. **Testes automatizados** — 75 testes unitários para parsers, utils e geração de links afiliados
 11. **Links afiliados Amazon BR** — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` via `build_affiliate_url()`
+12. **Links afiliados Mercado Livre** — URLs com formato `/p/MLB_ID?matt_word=...&matt_tool=...` via `build_affiliate_url()`
+13. **Correção URL ML** — `produto.mercadolivre.com.br` (404) substituído por `www.mercadolivre.com.br/p/`
 
 ---
 

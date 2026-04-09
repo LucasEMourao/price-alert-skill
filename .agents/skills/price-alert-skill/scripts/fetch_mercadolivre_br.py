@@ -16,6 +16,8 @@ from typing import Any
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
+from config import ML_MATT_WORD, ML_MATT_TOOL
+
 
 def parse_brl_from_label(text: str | None) -> float | None:
     """Parse price from ML aria-label like 'Agora: 206 reais com 64 centavos' or 'Antes: 299 reais'."""
@@ -80,13 +82,12 @@ def extract_products_from_html(html: str, max_results: int) -> list[dict[str, An
         mlb_match = re.search(r'(MLB[A-Z]?\d+)', card)
         asin = mlb_match.group(1) if mlb_match else None
 
-        # Product link — ML uses click1.mercadolivre.com.br tracking URLs
-        # Construct real URL from MLB ID
+        # Construct real URL from MLB ID using /p/ format (produto.mercadolivre.com.br returns 404)
         url = None
         if asin:
             mlb_clean = re.search(r'(MLB\d+)', asin)
             if mlb_clean:
-                url = f"https://produto.mercadolivre.com.br/{mlb_clean.group(1)}"
+                url = f"https://www.mercadolivre.com.br/p/{mlb_clean.group(1)}"
 
         # Sponsored detection
         is_sponsored = 'is_advertising=true' in card or 'type=pad' in card
@@ -146,6 +147,15 @@ def extract_html_from_response(body: str) -> str:
     return body
 
 
+def build_affiliate_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    if ML_MATT_WORD and ML_MATT_TOOL:
+        separator = "&" if "?" in url else "?"
+        return f"{url}{separator}matt_word={ML_MATT_WORD}&matt_tool={ML_MATT_TOOL}"
+    return url
+
+
 def normalize_products(raw_products: list[dict[str, Any]]) -> list[dict[str, Any]]:
     products: list[dict[str, Any]] = []
     for raw in raw_products:
@@ -153,7 +163,7 @@ def normalize_products(raw_products: list[dict[str, Any]]) -> list[dict[str, Any
             "position": raw["position"],
             "asin": raw.get("asin"),
             "title": raw.get("title"),
-            "url": raw.get("url"),
+            "url": build_affiliate_url(raw.get("url")),
             "image_url": raw.get("image_url"),
             "price_text": raw.get("price_text"),
             "price": raw.get("price"),

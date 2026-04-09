@@ -28,12 +28,12 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
     ├── scrape_server.py             # Servidor Playwright (substitui Steel Browser)
     ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
     ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (extrai list_price + gera link afiliado)
-    ├── fetch_mercadolivre_br.py     # Fetcher Mercado Livre (extrai list_price)
+    ├── fetch_mercadolivre_br.py     # Fetcher Mercado Livre (extrai list_price + gera link afiliado)
     ├── utils.py                     # Funções compartilhadas (emojis, formatação, templates, dedup)
     └── tests/                       # Testes unitários
         ├── test_utils.py            # Testes de utils
         ├── test_amazon.py           # Testes do parser Amazon (inclui build_affiliate_url)
-        └── test_mercadolivre.py     # Testes do parser ML
+        └── test_mercadolivre.py     # Testes do parser ML (inclui build_affiliate_url)
 ```
 
 ## Dependências
@@ -123,7 +123,7 @@ python3 -m pytest tests/ -v
 - Integrado no `scan_deals.py` — filtra antes de formatar mensagens.
 
 ### 10. Testes automatizados
-- 75 testes unitários cobrindo utils, parser Amazon (incluindo geração de links afiliados) e parser ML.
+- 79 testes unitários cobrindo utils, parser Amazon (incluindo geração de links afiliados) e parser ML (incluindo geração de links afiliados).
 - Rodar com: `python3 -m pytest tests/ -v`
 
 ### 11. Links afiliados — Amazon BR (implementado)
@@ -133,10 +133,13 @@ python3 -m pytest tests/ -v
 - Tag configurável via variável de ambiente `AMAZON_AFFILIATE_TAG` (default: `brunoentende-20`) ou editando `scripts/config.py`.
 - Implementação: função `build_affiliate_url()` em `fetch_amazon_br.py` + `config.py`.
 
-### 12. Links afiliados — Mercado Livre (pendente)
-- Formato ML usa parâmetros `matt_word` e `matt_tool` (ex: `?matt_word=USERNAME&matt_tool=TOOLID`).
-- Variáveis de ambiente `ML_MATT_WORD` e `ML_MATT_TOOL` serão adicionadas em `config.py` quando implementado.
-- **Pendente**: testar formato de URL e garantir que parâmetros de afiliado sobrevivam ao redirect do ML.
+### 12. Links afiliados — Mercado Livre (implementado)
+- URLs do Mercado Livre agora usam formato `www.mercadolivre.com.br/p/MLB_ID` (o formato antigo `produto.mercadolivre.com.br` retorna 404).
+- Parâmetros de afiliado `matt_word` e `matt_tool` são anexados automaticamente.
+- Formato gerado: `https://www.mercadolivre.com.br/p/MLB_ID?matt_word=tb20240811145500&matt_tool=21915026`
+- O formato `/p/MLB_ID` redireciona 301 para a URL completa com slug, e os parâmetros de afiliado sobrevivem ao redirect.
+- Parâmetros configuráveis via variáveis de ambiente `ML_MATT_WORD` e `ML_MATT_TOOL` em `config.py`.
+- Implementação: função `build_affiliate_url()` em `fetch_mercadolivre_br.py`.
 
 ```
 {emoji} OFERTA DO DIA 👇
@@ -157,7 +160,7 @@ python3 -m pytest tests/ -v
 | Marketplace | Status | Links afiliados | Observação |
 |---|---|---|---|
 | Amazon BR | Funcionando | Automático (`?tag=brunoentende-20`) | Extrai preço atual + preço anterior riscado |
-| Mercado Livre | Funcionando | Pendente | Extrai preço atual + preço anterior riscado, links limpos por enquanto |
+| Mercado Livre | Funcionando | Automático (`?matt_word=...&matt_tool=...`) | Extrai preço atual + preço anterior riscado |
 | Shopee BR | Descartada | N/A | Proteção anti-bot inviabiliza uso |
 
 ## Comandos úteis

@@ -1,6 +1,9 @@
 """Tests for Mercado Livre BR fetcher parser."""
 
+from unittest.mock import patch
+
 from fetch_mercadolivre_br import (
+    build_affiliate_url,
     extract_products_from_html,
     parse_brl_from_label,
     slugify_query,
@@ -63,7 +66,7 @@ class TestExtractProductsFromHtml:
         assert product["price"] == 149.90
         assert product["list_price"] == 199.0
         assert product["image_url"] == "https://example.com/img.jpg"
-        assert product["url"] == "https://produto.mercadolivre.com.br/MLB12345678"
+        assert product["url"] == "https://www.mercadolivre.com.br/p/MLB12345678"
 
     def test_extract_product_without_list_price(self):
         html = """
@@ -124,3 +127,27 @@ class TestExtractProductsFromHtml:
 
         assert len(products) == 1
         assert products[0]["is_sponsored"] is True
+
+
+class TestBuildAffiliateUrl:
+    @patch("fetch_mercadolivre_br.ML_MATT_WORD", "tb20240811145500")
+    @patch("fetch_mercadolivre_br.ML_MATT_TOOL", "21915026")
+    def test_builds_affiliate_url(self):
+        url = build_affiliate_url("https://www.mercadolivre.com.br/p/MLB12345678")
+        assert url == "https://www.mercadolivre.com.br/p/MLB12345678?matt_word=tb20240811145500&matt_tool=21915026"
+
+    @patch("fetch_mercadolivre_br.ML_MATT_WORD", "tb20240811145500")
+    @patch("fetch_mercadolivre_br.ML_MATT_TOOL", "21915026")
+    def test_builds_affiliate_url_with_existing_params(self):
+        url = build_affiliate_url("https://www.mercadolivre.com.br/p/MLB12345678?some=param")
+        assert url == "https://www.mercadolivre.com.br/p/MLB12345678?some=param&matt_word=tb20240811145500&matt_tool=21915026"
+
+    @patch("fetch_mercadolivre_br.ML_MATT_WORD", "")
+    @patch("fetch_mercadolivre_br.ML_MATT_TOOL", "")
+    def test_returns_plain_url_when_no_affiliate_config(self):
+        url = build_affiliate_url("https://www.mercadolivre.com.br/p/MLB12345678")
+        assert url == "https://www.mercadolivre.com.br/p/MLB12345678"
+
+    def test_returns_none_for_none_input(self):
+        url = build_affiliate_url(None)
+        assert url is None
