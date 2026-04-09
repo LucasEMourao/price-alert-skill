@@ -98,13 +98,6 @@ def format_deal_message(deal: dict[str, Any]) -> str:
             f"🎯 Hoje: {price_today}",
         ])
 
-    if image_url:
-        lines.extend([
-            "",
-            "📷 Imagem do produto:",
-            image_url,
-        ])
-
     lines.extend([
         "",
         "🛍️ Comprar aqui:",

@@ -123,7 +123,7 @@ class TestFormatDealMessage:
         assert "Era:" not in msg
         assert "Desconto:" not in msg
 
-    def test_message_with_image(self):
+    def test_message_without_image_url_in_text(self):
         deal = {
             "title": "Produto com imagem",
             "current_price": 50.0,
@@ -135,8 +135,8 @@ class TestFormatDealMessage:
         }
         msg = format_deal_message(deal)
 
-        assert "📷 Imagem do produto:" in msg
-        assert "https://example.com/image.jpg" in msg
+        assert "📷 Imagem do produto:" not in msg
+        assert "https://example.com/image.jpg" not in msg
 
     def test_long_title_truncated(self):
         deal = {
