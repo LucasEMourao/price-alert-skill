@@ -134,10 +134,11 @@ python3 -m pytest tests/ -v
 - Implementação: função `build_affiliate_url()` em `fetch_amazon_br.py` + `config.py`.
 
 ### 12. Links afiliados — Mercado Livre (implementado)
-- URLs do Mercado Livre agora usam formato `www.mercadolivre.com.br/p/MLB_ID` (o formato antigo `produto.mercadolivre.com.br` retorna 404).
-- Parâmetros de afiliado `matt_word` e `matt_tool` são anexados automaticamente.
-- Formato gerado: `https://www.mercadolivre.com.br/p/MLB_ID?matt_word=tb20240811145500&matt_tool=21915026`
-- O formato `/p/MLB_ID` redireciona 301 para a URL completa com slug, e os parâmetros de afiliado sobrevivem ao redirect.
+- URLs do Mercado Livre usam formato `produto.mercadolivre.com.br/MLB-{number}-_JM` com hífen obrigatório entre prefixo e número.
+- O formato antigo `produto.mercadolivre.com.br/MLB5351289630` (sem hífen) retorna 404.
+- O formato `/p/MLB_ID` em `www.mercadolivre.com.br` também retorna 404.
+- Parâmetros de afiliado `matt_word` e `matt_tool` são anexados via query string.
+- Formato gerado: `https://produto.mercadolivre.com.br/MLB-5351289630-_JM?matt_word=tb20240811145500&matt_tool=21915026`
 - Parâmetros configuráveis via variáveis de ambiente `ML_MATT_WORD` e `ML_MATT_TOOL` em `config.py`.
 - Implementação: função `build_affiliate_url()` em `fetch_mercadolivre_br.py`.
 

@@ -82,12 +82,14 @@ def extract_products_from_html(html: str, max_results: int) -> list[dict[str, An
         mlb_match = re.search(r'(MLB[A-Z]?\d+)', card)
         asin = mlb_match.group(1) if mlb_match else None
 
-        # Construct real URL from MLB ID using /p/ format (produto.mercadolivre.com.br returns 404)
+        # Construct real URL from MLB ID using produto.mercadolivre.com.br
+        # Format: https://produto.mercadolivre.com.br/MLB-{number}-_JM
+        # The dash between prefix and number is required — MLB5351289630 returns 404
         url = None
         if asin:
-            mlb_clean = re.search(r'(MLB\d+)', asin)
+            mlb_clean = re.search(r'(MLB)(\d+)', asin)
             if mlb_clean:
-                url = f"https://www.mercadolivre.com.br/p/{mlb_clean.group(1)}"
+                url = f"https://produto.mercadolivre.com.br/{mlb_clean.group(1)}-{mlb_clean.group(2)}-_JM"
 
         # Sponsored detection
         is_sponsored = 'is_advertising=true' in card or 'type=pad' in card

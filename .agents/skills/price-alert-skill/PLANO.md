@@ -52,7 +52,7 @@ python3 scan_deals.py --all --min-discount 10
 | Código consolidado | `utils.py` com funções compartilhadas |
 | Deduplicação cross-session | `sent_deals.json` — evita repetir ofertas entre execuções (limpeza automática a cada 7 dias) |
 | **Links afiliados Amazon** | `config.py` + `build_affiliate_url()` em `fetch_amazon_br.py` — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` |
-| **Links afiliados ML** | `config.py` + `build_affiliate_url()` em `fetch_mercadolivre_br.py` — URLs com `?matt_word=tb20240811145500&matt_tool=21915026` (formato `/p/MLB_ID`) |
+| **Links afiliados ML** | `config.py` + `build_affiliate_url()` em `fetch_mercadolivre_br.py` — URLs com `?matt_word=tb20240811145500&matt_tool=21915026` (formato `MLB-{num}-_JM`) |
 | Dependências | `requirements.txt` com fastapi, uvicorn, playwright |
 | Testes automatizados | 79 testes unitários (utils, Amazon parser + afiliados, ML parser + afiliados) |
 | Zoom/Shopee/SQLite | Removidos (pipeline legado descartado) |
@@ -89,7 +89,7 @@ python3 scan_deals.py --all --min-discount 10
 ### Passo 1: ~~Implementar links afiliados~~ ✅ Concluído
 - **Amazon BR**: Links afiliados gerados automaticamente via `?tag=brunoentende-20`
 - **Mercado Livre**: Links afiliados gerados automaticamente via `?matt_word=tb20240811145500&matt_tool=21915026`
-- **Correção ML**: URL base alterada de `produto.mercadolivre.com.br/MLB_ID` (404) para `www.mercadolivre.com.br/p/MLB_ID` (redirect 301 preserva query params)
+- **Correção ML**: URL base alterada de `produto.mercadolivre.com.br/MLB_ID` (404) para `produto.mercadolivre.com.br/MLB-{number}-_JM` (formato com hífen obrigatório)
 
 ### Passo 2: Implementar envio automático para WhatsApp
 **Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web, com a mensagem como legenda da imagem para melhor experiência do usuário.
@@ -146,7 +146,7 @@ Configuradas em `scan_deals.py` (variável `GAMER_QUERIES`):
 10. **Testes automatizados** — 75 testes unitários para parsers, utils e geração de links afiliados
 11. **Links afiliados Amazon BR** — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` via `build_affiliate_url()`
 12. **Links afiliados Mercado Livre** — URLs com formato `/p/MLB_ID?matt_word=...&matt_tool=...` via `build_affiliate_url()`
-13. **Correção URL ML** — `produto.mercadolivre.com.br` (404) substituído por `www.mercadolivre.com.br/p/`
+13. **Correção URL ML** — `produto.mercadolivre.com.br/MLB_ID` (404) corrigido para `produto.mercadolivre.com.br/MLB-{number}-_JM` (hífen obrigatório)
 
 ---
 

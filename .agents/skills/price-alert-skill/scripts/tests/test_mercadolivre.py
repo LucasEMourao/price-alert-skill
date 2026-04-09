@@ -66,7 +66,7 @@ class TestExtractProductsFromHtml:
         assert product["price"] == 149.90
         assert product["list_price"] == 199.0
         assert product["image_url"] == "https://example.com/img.jpg"
-        assert product["url"] == "https://www.mercadolivre.com.br/p/MLB12345678"
+        assert product["url"] == "https://produto.mercadolivre.com.br/MLB-12345678-_JM"
 
     def test_extract_product_without_list_price(self):
         html = """
@@ -133,20 +133,20 @@ class TestBuildAffiliateUrl:
     @patch("fetch_mercadolivre_br.ML_MATT_WORD", "tb20240811145500")
     @patch("fetch_mercadolivre_br.ML_MATT_TOOL", "21915026")
     def test_builds_affiliate_url(self):
-        url = build_affiliate_url("https://www.mercadolivre.com.br/p/MLB12345678")
-        assert url == "https://www.mercadolivre.com.br/p/MLB12345678?matt_word=tb20240811145500&matt_tool=21915026"
+        url = build_affiliate_url("https://produto.mercadolivre.com.br/MLB-12345678-_JM")
+        assert url == "https://produto.mercadolivre.com.br/MLB-12345678-_JM?matt_word=tb20240811145500&matt_tool=21915026"
 
     @patch("fetch_mercadolivre_br.ML_MATT_WORD", "tb20240811145500")
     @patch("fetch_mercadolivre_br.ML_MATT_TOOL", "21915026")
     def test_builds_affiliate_url_with_existing_params(self):
-        url = build_affiliate_url("https://www.mercadolivre.com.br/p/MLB12345678?some=param")
-        assert url == "https://www.mercadolivre.com.br/p/MLB12345678?some=param&matt_word=tb20240811145500&matt_tool=21915026"
+        url = build_affiliate_url("https://produto.mercadolivre.com.br/MLB-12345678-_JM?some=param")
+        assert url == "https://produto.mercadolivre.com.br/MLB-12345678-_JM?some=param&matt_word=tb20240811145500&matt_tool=21915026"
 
     @patch("fetch_mercadolivre_br.ML_MATT_WORD", "")
     @patch("fetch_mercadolivre_br.ML_MATT_TOOL", "")
     def test_returns_plain_url_when_no_affiliate_config(self):
-        url = build_affiliate_url("https://www.mercadolivre.com.br/p/MLB12345678")
-        assert url == "https://www.mercadolivre.com.br/p/MLB12345678"
+        url = build_affiliate_url("https://produto.mercadolivre.com.br/MLB-12345678-_JM")
+        assert url == "https://produto.mercadolivre.com.br/MLB-12345678-_JM"
 
     def test_returns_none_for_none_input(self):
         url = build_affiliate_url(None)
