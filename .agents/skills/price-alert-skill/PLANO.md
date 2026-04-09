@@ -52,7 +52,7 @@ python3 scan_deals.py --all --min-discount 10
 | Código consolidado | `utils.py` com funções compartilhadas |
 | Deduplicação cross-session | `sent_deals.json` — evita repetir ofertas entre execuções (limpeza automática a cada 7 dias) |
 | **Links afiliados Amazon** | `config.py` + `build_affiliate_url()` em `fetch_amazon_br.py` — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` |
-| **Links afiliados ML** | `config.py` + `build_affiliate_url()` em `fetch_mercadolivre_br.py` — URLs com `?matt_word=tb20240811145500&matt_tool=21915026` (formato `MLB-{num}-_JM`) |
+| **Links afiliados ML** | `config.py` + `build_affiliate_url()` em `fetch_mercadolivre_br.py` — **PARCIAL**: anexa `?matt_word=...&matt_tool=...` mas URLs construídas do ID são frágeis (precisa agent browser) |
 | Dependências | `requirements.txt` com fastapi, uvicorn, playwright |
 | Testes automatizados | 79 testes unitários (utils, Amazon parser + afiliados, ML parser + afiliados) |
 | Zoom/Shopee/SQLite | Removidos (pipeline legado descartado) |
@@ -86,10 +86,24 @@ python3 scan_deals.py --all --min-discount 10
 
 ## Próximos Passos
 
-### Passo 1: ~~Implementar links afiliados~~ ✅ Concluído
-- **Amazon BR**: Links afiliados gerados automaticamente via `?tag=brunoentende-20`
-- **Mercado Livre**: Links afiliados gerados automaticamente via `?matt_word=tb20240811145500&matt_tool=21915026`
-- **Correção ML**: URL base alterada de `produto.mercadolivre.com.br/MLB_ID` (404) para `produto.mercadolivre.com.br/MLB-{number}-_JM` (formato com hífen obrigatório)
+### Passo 1: ~~Implementar links afiliados~~ ✅ Parcial
+- **Amazon BR**: Links afiliados gerados automaticamente via `?tag=brunoentende-20` — **funcionando e testado**
+- **Mercado Livre**: Parâmetros de afiliado (`?matt_word=...&matt_tool=...`) prontos, mas **URLs construídas do ID são frágeis**. Formato `MLB-{number}-_JM` funciona para alguns IDs mas falha para outros. ML carrega produtos via JavaScript e não inclui links reais no HTML estático, impossibilitando extração dos links verdadeiros sem renderização JS.
+- **Correção ML**: URL base alterada de `produto.mercadolivre.com.br/MLB_ID` (404) para `produto.mercadolivre.com.br/MLB-{number}-_JM` (hífen obrigatório). **Ainda não é 100% confiável.**
+
+### Passo 1.5: Implementar agent browser para ML (próximo passo)
+**Problema:** As URLs do ML construídas a partir do ID do produto (ex: `MLB-90565974145-_JM`) não são confiáveis — alguns IDs geram página 404. O ML carrega conteúdo via JavaScript, impedindo extração de links reais por scraping estático.
+
+**Solução:** Implementar agent browser (Playwright com sessão autenticada) para:
+1. Navegar nos resultados de busca do ML com JavaScript renderizado
+2. Extrair os **links reais** dos cards de produto (que contêm slug + ID correto)
+3. Anexar `?matt_word=...&matt_tool=...` nos links extraídos
+4. Potencialmente viabilizar também a Shopee (com login manual inicial)
+
+**Benefícios adicionais do agent browser:**
+- Links de afiliado 100% confiáveis (extraídos do HTML real, não construídos artificialmente)
+- Shopee volta a ser viável (com login manual uma vez por sessão)
+- Preços mais precisos (página renderizada = preço atualizado)
 
 ### Passo 2: Implementar envio automático para WhatsApp
 **Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web, com a mensagem como legenda da imagem para melhor experiência do usuário.
@@ -143,10 +157,11 @@ Configuradas em `scan_deals.py` (variável `GAMER_QUERIES`):
 7. **Imagem via link** — Link do produto no final gera preview automático no WhatsApp
 8. **Código Shopee removido** — ~225 linhas de endpoints de sessão/login removidos do scrape_server.py
 9. **Deduplicação cross-session** — `sent_deals.json` com limpeza automática (7 dias)
-10. **Testes automatizados** — 75 testes unitários para parsers, utils e geração de links afiliados
-11. **Links afiliados Amazon BR** — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` via `build_affiliate_url()`
-12. **Links afiliados Mercado Livre** — URLs com formato `/p/MLB_ID?matt_word=...&matt_tool=...` via `build_affiliate_url()`
-13. **Correção URL ML** — `produto.mercadolivre.com.br/MLB_ID` (404) corrigido para `produto.mercadolivre.com.br/MLB-{number}-_JM` (hífen obrigatório)
+10. **Testes automatizados** — 79 testes unitários para parsers, utils e geração de links afiliados
+11. **Links afiliados Amazon BR** — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` via `build_affiliate_url()` — **funcionando**
+12. **Links afiliados Mercado Livre** — Parâmetros prontos, mas URLs construídas do ID são frágeis — **precisa agent browser para extrair links reais**
+13. **Correção URL ML** — `produto.mercadolivre.com.br/MLB_ID` (404) corrigido para `produto.mercadolivre.com.br/MLB-{number}-_JM` (hífen obrigatório) — ainda não 100% confiável
+14. **Imagem removida do texto da mensagem** — `image_url` mantido no dict para uso futuro por `send_to_whatsapp.py`, mas não aparece mais no texto
 
 ---
 

@@ -120,8 +120,8 @@ O link do produto no final da mensagem gera automaticamente um preview com image
 ## Guardrails
 
 - O servidor de scraping (`scripts/scrape_server.py`) deve estar rodando em `http://localhost:3000`.
-- Amazon BR gera links de afiliado automaticamente com tag `brunoentende-20` (configuravel via env var `AMAZON_AFFILIATE_TAG`).
-- Mercado Livre gera links de afiliado automaticamente com `matt_word` e `matt_tool` (configuravel via env vars `ML_MATT_WORD` e `ML_MATT_TOOL`). URLs usam formato `produto.mercadolivre.com.br/MLB-{number}-_JM`.
-- Shopee BR nao e suportada (protecao anti-bot inviabiliza uso).
+- Amazon BR gera links de afiliado automaticamente com tag `brunoentende-20` (configuravel via env var `AMAZON_AFFILIATE_TAG`). **Funcionando e testado.**
+- Mercado Livre anexa `matt_word` e `matt_tool` nos links, mas **URLs construídas do ID são frágeis** (alguns IDs geram 404). Próximo passo: agent browser para extrair links reais.
+- Shopee BR nao e suportada por enquanto (agent browser pode viabilizar no futuro).
 - Confiar nos descontos exibidos pelo proprio marketplace — nao ha validacao externa.
 - Se nao houver descontos relevantes, responder: `Sem descontos encontrados no momento.`

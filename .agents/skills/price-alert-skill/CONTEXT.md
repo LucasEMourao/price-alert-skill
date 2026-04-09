@@ -133,14 +133,19 @@ python3 -m pytest tests/ -v
 - Tag configurável via variável de ambiente `AMAZON_AFFILIATE_TAG` (default: `brunoentende-20`) ou editando `scripts/config.py`.
 - Implementação: função `build_affiliate_url()` em `fetch_amazon_br.py` + `config.py`.
 
-### 12. Links afiliados — Mercado Livre (implementado)
-- URLs do Mercado Livre usam formato `produto.mercadolivre.com.br/MLB-{number}-_JM` com hífen obrigatório entre prefixo e número.
-- O formato antigo `produto.mercadolivre.com.br/MLB5351289630` (sem hífen) retorna 404.
-- O formato `/p/MLB_ID` em `www.mercadolivre.com.br` também retorna 404.
-- Parâmetros de afiliado `matt_word` e `matt_tool` são anexados via query string.
-- Formato gerado: `https://produto.mercadolivre.com.br/MLB-5351289630-_JM?matt_word=tb20240811145500&matt_tool=21915026`
-- Parâmetros configuráveis via variáveis de ambiente `ML_MATT_WORD` e `ML_MATT_TOOL` em `config.py`.
-- Implementação: função `build_affiliate_url()` em `fetch_mercadolivre_br.py`.
+### 12. Links afiliados — Mercado Livre (parcialmente implementado, com problemas)
+- URLs construídas a partir do ID MLB não funcionam de forma confiável. Formatos testados:
+  - `produto.mercadolivre.com.br/MLB5351289630` → 404
+  - `www.mercadolivre.com.br/p/MLB5351289630` → 404
+  - `produto.mercadolivre.com.br/MLB-5351289630-_JM` → funciona para alguns IDs, mas **falhou para `MLB-90565974145-_JM`** (página não existe)
+- O ML carrega produtos via JavaScript e não inclui links reais no HTML estático. A construção de URL a partir do ID é frágil porque nem todo ID MLB corresponde a um listing real.
+- **Próximo passo**: Implementar agent browser para extrair os links reais dos resultados de busca do ML (que contêm o slug e o ID correto), em vez de construir URLs artificialmente.
+- Parâmetros de afiliado `matt_word=tb20240811145500` e `matt_tool=21915026` estão configurados e prontos para serem anexados aos links reais.
+- Implementação atual: `build_affiliate_url()` em `fetch_mercadolivre_br.py` (anexa `?matt_word=...&matt_tool=...`).
+
+### 13. Mensagens WhatsApp — imagem removida do texto
+- `format_deal_message()` não inclui mais `📷 Imagem do produto: {URL}` no texto.
+- O campo `image_url` continua no dict do deal para uso futuro pelo `send_to_whatsapp.py` (Passo 2: enviar imagem como mídia com mensagem como legenda).
 
 ```
 {emoji} OFERTA DO DIA 👇
@@ -161,8 +166,8 @@ python3 -m pytest tests/ -v
 | Marketplace | Status | Links afiliados | Observação |
 |---|---|---|---|
 | Amazon BR | Funcionando | Automático (`?tag=brunoentende-20`) | Extrai preço atual + preço anterior riscado |
-| Mercado Livre | Funcionando | Automático (`?matt_word=...&matt_tool=...`) | Extrai preço atual + preço anterior riscado |
-| Shopee BR | Descartada | N/A | Proteção anti-bot inviabiliza uso |
+| Mercado Livre | Parcialmente funcionando | Parcial (`?matt_word=...&matt_tool=...`) | URLs construídas do ID são frágeis — precisa agent browser para extrair links reais |
+| Shopee BR | Descartada (por ora) | N/A | Proteção anti-bot inviável sem login — agent browser pode viabilizar |
 
 ## Comandos úteis
 ```bash
