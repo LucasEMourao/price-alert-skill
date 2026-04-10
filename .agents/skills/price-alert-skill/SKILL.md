@@ -34,28 +34,35 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros.
 ## Scripts Principais
 
 - `scripts/config.py` — Configuracao (tags de afiliado, constantes)
-- `scripts/scrape_server.py` — Servidor Playwright com stealth (substitui Steel Browser)
+- `scripts/scrape_server.py` — Servidor Playwright com stealth (usado pela Amazon)
 - `scripts/scan_deals.py` — Script principal: busca ofertas e gera mensagens WhatsApp
 - `scripts/fetch_amazon_br.py` — Fetcher Amazon BR (extrai preco, gera link afiliado)
-- `scripts/fetch_mercadolivre_br.py` — Fetcher Mercado Livre (extrai preco, gera link afiliado)
+- `scripts/fetch_ml_browser.py` — Fetcher Mercado Livre via agent-browser (links reais, gera link afiliado)
+- `scripts/fetch_mercadolivre_br.py` — Fetcher ML legado (HTML estático, mantido como fallback)
 - `scripts/utils.py` — Funcoes compartilhadas (emojis, formatacao de preco, template de mensagem)
 
 ## Comandos
 
 ```bash
-# Iniciar servidor de scraping
+# Instalar dependências (primeira vez)
+pip install fastapi uvicorn playwright
+playwright install chromium
+npm install -g agent-browser
+agent-browser install
+
+# Iniciar servidor de scraping (necessário apenas para Amazon)
 python3 scripts/scrape_server.py --port 3000
 
-# Buscar ofertas de uma categoria
+# Buscar ofertas de uma categoria (ML usa agent-browser, Amazon usa scrape server)
 python3 scripts/scan_deals.py "mouse gamer" --min-discount 10
 
 # Varrer todas as categorias gamer
 python3 scripts/scan_deals.py --all --min-discount 10
 
-# Buscar com mais resultados
-python3 scripts/scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
+# Buscar apenas no Mercado Livre (não precisa do scrape server)
+python3 scripts/scan_deals.py "mouse gamer" --marketplaces mercadolivre_br --min-discount 5
 
-# Buscar apenas na Amazon
+# Buscar apenas na Amazon (requer scrape server rodando)
 python3 scripts/scan_deals.py --all --marketplaces amazon_br --min-discount 15
 ```
 
@@ -113,15 +120,16 @@ O link do produto no final da mensagem gera automaticamente um preview com image
 ## Dependencias
 
 - **Python 3.12+**
-- **fastapi**, **uvicorn**, **playwright**
-- **Chromium**: `playwright install chromium`
+- **fastapi**, **uvicorn**, **playwright** (apenas para Amazon)
+- **Chromium** (Playwright): `playwright install chromium`
+- **agent-browser**: `npm install -g agent-browser && agent-browser install`
 - **Sistema**: `sudo apt install -y libnspr4 libnss3`
 
 ## Guardrails
 
-- O servidor de scraping (`scripts/scrape_server.py`) deve estar rodando em `http://localhost:3000`.
+- O servidor de scraping (`scripts/scrape_server.py`) deve estar rodando apenas para Amazon (`http://localhost:3000`). **ML usa agent-browser e não depende do servidor.**
 - Amazon BR gera links de afiliado automaticamente com tag `brunoentende-20` (configuravel via env var `AMAZON_AFFILIATE_TAG`). **Funcionando e testado.**
-- Mercado Livre anexa `matt_word` e `matt_tool` nos links, mas **URLs construídas do ID são frágeis** (alguns IDs geram 404). Próximo passo: agent browser para extrair links reais.
+- Mercado Livre extrai links reais via agent-browser (Chrome headless) e anexa `matt_word` e `matt_tool` automaticamente. **Funcionando e testado.**
 - Shopee BR nao e suportada por enquanto (agent browser pode viabilizar no futuro).
 - Confiar nos descontos exibidos pelo proprio marketplace — nao ha validacao externa.
 - Se nao houver descontos relevantes, responder: `Sem descontos encontrados no momento.`

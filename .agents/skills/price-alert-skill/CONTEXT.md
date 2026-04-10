@@ -25,23 +25,27 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
 │   └── output-schema.md             # Schema de saída dos fetchers
 └── scripts/
     ├── config.py                   # Configuração (tags de afiliado)
-    ├── scrape_server.py             # Servidor Playwright (substitui Steel Browser)
+    ├── scrape_server.py             # Servidor Playwright (apenas Amazon)
     ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
     ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (extrai list_price + gera link afiliado)
-    ├── fetch_mercadolivre_br.py     # Fetcher Mercado Livre (extrai list_price + gera link afiliado)
+    ├── fetch_ml_browser.py          # ★ Fetcher ML via agent-browser (links reais + afiliado)
+    ├── fetch_mercadolivre_br.py     # Fetcher ML legado (HTML estático, fallback)
     ├── utils.py                     # Funções compartilhadas (emojis, formatação, templates, dedup)
-    └── tests/                       # Testes unitários
+    └── tests/                       # Testes unitários (96 testes)
         ├── test_utils.py            # Testes de utils
         ├── test_amazon.py           # Testes do parser Amazon (inclui build_affiliate_url)
-        └── test_mercadolivre.py     # Testes do parser ML (inclui build_affiliate_url)
+        ├── test_mercadolivre.py     # Testes do parser ML legado
+        └── test_ml_browser.py       # ★ Testes do fetcher agent-browser
 ```
 
 ## Dependências
 - **Python 3.12+** (stdlib apenas)
-- **fastapi** — servidor HTTP
-- **uvicorn** — servidor ASGI
-- **playwright** — browser headless com stealth
-- **Chromium** — `playwright install chromium`
+- **fastapi** — servidor HTTP (apenas para Amazon)
+- **uvicorn** — servidor ASGI (apenas para Amazon)
+- **playwright** — browser headless com stealth (apenas para Amazon)
+- **Chromium** — `playwright install chromium` (apenas para Amazon)
+- **agent-browser** — CLI Rust para automação de browser (usado para ML)
+- **Chrome for Testing** — `agent-browser install` (gerenciado pelo agent-browser)
 - **Dependências de sistema**: `sudo apt install -y libnspr4 libnss3`
 
 ## Como usar (fluxo atual)
@@ -51,6 +55,10 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
 pip install fastapi uvicorn playwright
 playwright install chromium
 sudo apt install -y libnspr4 libnss3  # se necessário
+
+# Agent-browser (para Mercado Livre — links reais)
+npm install -g agent-browser
+agent-browser install  # Baixa Chrome for Testing
 ```
 
 ### 2. Iniciar o servidor de scraping
@@ -61,11 +69,14 @@ python3 scrape_server.py --port 3000
 
 ### 3. Buscar ofertas (script principal)
 ```bash
-# Buscar ofertas de uma categoria
+# Buscar ofertas de uma categoria (ML não precisa do scrape server)
 python3 scan_deals.py "mouse gamer" --min-discount 10
 
 # Buscar TODAS as categorias gamer
 python3 scan_deals.py --all --min-discount 10
+
+# Buscar apenas no Mercado Livre (sem precisar do scrape server)
+python3 scan_deals.py "mouse gamer" --marketplaces mercadolivre_br --min-discount 5
 
 # Opções
 python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
@@ -133,15 +144,13 @@ python3 -m pytest tests/ -v
 - Tag configurável via variável de ambiente `AMAZON_AFFILIATE_TAG` (default: `brunoentende-20`) ou editando `scripts/config.py`.
 - Implementação: função `build_affiliate_url()` em `fetch_amazon_br.py` + `config.py`.
 
-### 12. Links afiliados — Mercado Livre (parcialmente implementado, com problemas)
-- URLs construídas a partir do ID MLB não funcionam de forma confiável. Formatos testados:
-  - `produto.mercadolivre.com.br/MLB5351289630` → 404
-  - `www.mercadolivre.com.br/p/MLB5351289630` → 404
-  - `produto.mercadolivre.com.br/MLB-5351289630-_JM` → funciona para alguns IDs, mas **falhou para `MLB-90565974145-_JM`** (página não existe)
-- O ML carrega produtos via JavaScript e não inclui links reais no HTML estático. A construção de URL a partir do ID é frágil porque nem todo ID MLB corresponde a um listing real.
-- **Próximo passo**: Implementar agent browser para extrair os links reais dos resultados de busca do ML (que contêm o slug e o ID correto), em vez de construir URLs artificialmente.
-- Parâmetros de afiliado `matt_word=tb20240811145500` e `matt_tool=21915026` estão configurados e prontos para serem anexados aos links reais.
-- Implementação atual: `build_affiliate_url()` em `fetch_mercadolivre_br.py` (anexa `?matt_word=...&matt_tool=...`).
+### 12. Links afiliados — Mercado Livre (RESOLVIDO com agent-browser)
+- **Problema original**: URLs construídas a partir do ID MLB (`produto.mercadolivre.com.br/MLB-{number}-_JM`) não eram confiáveis — alguns IDs geravam página 404.
+- **Solução**: Implementado `fetch_ml_browser.py` que usa o **agent-browser** (CLI Rust) para renderizar a página com JavaScript e extrair os **links reais** do HTML renderizado.
+- URLs reais extraídas: `https://www.mercadolivre.com.br/{slug-do-produto}/p/MLB{id}` (ex: `https://www.mercadolivre.com.br/mouse-gamer-redragon-cobra-rgb-preto-preto/p/MLB8752191`).
+- Parâmetros de afiliado `matt_word=tb20240811145500` e `matt_tool=21915026` são anexados automaticamente.
+- `scan_deals.py` agora usa `fetch_ml_browser.py` para ML em vez do servidor Playwright.
+- O fetcher antigo `fetch_mercadolivre_br.py` (baseado em HTML estático) é mantido como fallback.
 
 ### 13. Mensagens WhatsApp — imagem removida do texto
 - `format_deal_message()` não inclui mais `📷 Imagem do produto: {URL}` no texto.
@@ -162,19 +171,27 @@ python3 -m pytest tests/ -v
 🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
 
-## Status dos marketplaces (09/04/2026)
+## Status dos marketplaces (10/04/2026)
 | Marketplace | Status | Links afiliados | Observação |
 |---|---|---|---|
 | Amazon BR | Funcionando | Automático (`?tag=brunoentende-20`) | Extrai preço atual + preço anterior riscado |
-| Mercado Livre | Parcialmente funcionando | Parcial (`?matt_word=...&matt_tool=...`) | URLs construídas do ID são frágeis — precisa agent browser para extrair links reais |
+| Mercado Livre | Funcionando ✅ | Automático (`?matt_word=...&matt_tool=...`) | Agent-browser extrai links reais com slug do HTML renderizado |
 | Shopee BR | Descartada (por ora) | N/A | Proteção anti-bot inviável sem login — agent browser pode viabilizar |
+
+## Dependências adicionais
+- **agent-browser** — `npm install -g agent-browser` (CLI Rust para automação de browser)
+- **Chrome for Testing** — `agent-browser install` (baixa Chrome automaticamente)
+- Note: agent-browser não depende do Playwright. É um binário Rust independente que gerencia seu próprio Chrome.
 
 ## Comandos úteis
 ```bash
-# Iniciar servidor de scraping
+# Instalar agent-browser (primeira vez)
+npm install -g agent-browser && agent-browser install
+
+# Iniciar servidor de scraping (apenas para Amazon)
 python3 scrape_server.py --port 3000
 
-# Buscar ofertas de mouse gamer
+# Buscar ofertas de mouse gamer (ML usa agent-browser automaticamente)
 python3 scan_deals.py "mouse gamer" --min-discount 10
 
 # Buscar todas as categorias gamer

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from fetch_amazon_br import run as run_amazon
-from fetch_mercadolivre_br import run as run_mercadolivre
+from fetch_ml_browser import run as run_mercadolivre_browser
 from utils import (
     calculate_discount,
     filter_new_deals,
@@ -98,7 +98,7 @@ def scan_marketplace(
     if marketplace == "amazon_br":
         result = run_amazon(query, api_base, "/v1/scrape", max_results, 30, 2500)
     elif marketplace == "mercadolivre_br":
-        result = run_mercadolivre(query, api_base, "/v1/scrape", max_results, 30, 2500)
+        result = run_mercadolivre_browser(query=query, max_results=max_results)
     else:
         return []
 

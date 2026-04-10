@@ -52,9 +52,9 @@ python3 scan_deals.py --all --min-discount 10
 | Código consolidado | `utils.py` com funções compartilhadas |
 | Deduplicação cross-session | `sent_deals.json` — evita repetir ofertas entre execuções (limpeza automática a cada 7 dias) |
 | **Links afiliados Amazon** | `config.py` + `build_affiliate_url()` em `fetch_amazon_br.py` — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` |
-| **Links afiliados ML** | `config.py` + `build_affiliate_url()` em `fetch_mercadolivre_br.py` — **PARCIAL**: anexa `?matt_word=...&matt_tool=...` mas URLs construídas do ID são frágeis (precisa agent browser) |
-| Dependências | `requirements.txt` com fastapi, uvicorn, playwright |
-| Testes automatizados | 79 testes unitários (utils, Amazon parser + afiliados, ML parser + afiliados) |
+| **Links afiliados ML** | `config.py` + `build_affiliate_url()` em `fetch_mercadolivre_br.py` — **FUNCIONANDO** via agent-browser (`fetch_ml_browser.py`) — extrai links reais do HTML renderizado |
+| Dependências | `requirements.txt` com fastapi, uvicorn, playwright + agent-browser (npm global) |
+| Testes automatizados | 96 testes unitários (utils, Amazon parser + afiliados, ML parser + afiliados, browser fetcher) |
 | Zoom/Shopee/SQLite | Removidos (pipeline legado descartado) |
 
 ---
@@ -91,19 +91,32 @@ python3 scan_deals.py --all --min-discount 10
 - **Mercado Livre**: Parâmetros de afiliado (`?matt_word=...&matt_tool=...`) prontos, mas **URLs construídas do ID são frágeis**. Formato `MLB-{number}-_JM` funciona para alguns IDs mas falha para outros. ML carrega produtos via JavaScript e não inclui links reais no HTML estático, impossibilitando extração dos links verdadeiros sem renderização JS.
 - **Correção ML**: URL base alterada de `produto.mercadolivre.com.br/MLB_ID` (404) para `produto.mercadolivre.com.br/MLB-{number}-_JM` (hífen obrigatório). **Ainda não é 100% confiável.**
 
-### Passo 1.5: Implementar agent browser para ML (próximo passo)
-**Problema:** As URLs do ML construídas a partir do ID do produto (ex: `MLB-90565974145-_JM`) não são confiáveis — alguns IDs geram página 404. O ML carrega conteúdo via JavaScript, impedindo extração de links reais por scraping estático.
+### Passo 1.5: ~~Implementar agent browser para ML~~ ✅ Concluído
+**Implementação concluída em 10/04/2026.**
 
-**Solução:** Implementar agent browser (Playwright com sessão autenticada) para:
-1. Navegar nos resultados de busca do ML com JavaScript renderizado
-2. Extrair os **links reais** dos cards de produto (que contêm slug + ID correto)
-3. Anexar `?matt_word=...&matt_tool=...` nos links extraídos
-4. Potencialmente viabilizar também a Shopee (com login manual inicial)
+**O que foi feito:**
+1. Instalado `agent-browser` globalmente via npm (`npm install -g agent-browser`)
+2. Baixado Chrome for Testing (`agent-browser install`)
+3. Criado `scripts/fetch_ml_browser.py` — novo fetcher que usa agent-browser CLI para:
+   - Navegar nos resultados de busca do ML com JavaScript renderizado
+   - Extrair os **links reais** dos cards de produto (ex: `https://www.mercadolivre.com.br/mouse-gamer-redragon-cobra-rgb-preto-preto/p/MLB8752191`)
+   - Extrair preço atual (`aria-label="Agora:"`) e preço anterior (`aria-label="Antes:"`)
+   - Anexar parâmetros de afiliado (`?matt_word=...&matt_tool=...`) automaticamente
+4. Atualizado `scan_deals.py` para usar `fetch_ml_browser.py` em vez do servidor Playwright para ML
+5. Adicionados 17 testes unitários em `tests/test_ml_browser.py`
+6. Total: 96 testes passando (79 + 17)
 
-**Benefícios adicionais do agent browser:**
-- Links de afiliado 100% confiáveis (extraídos do HTML real, não construídos artificialmente)
-- Shopee volta a ser viável (com login manual uma vez por sessão)
-- Preços mais precisos (página renderizada = preço atualizado)
+**Como funciona:**
+- O agent-browser abre Chrome em modo headless com user-agent personalizado
+- Navega para `lista.mercadolivre.com.br/{query}`
+- Aguarda o `networkidle` (JavaScript renderiza os produtos)
+- Executa JS no browser para extrair título, URL real, preços e imagem
+- Fecha o browser e retorna os dados estruturados
+
+**Arquivos criados/modificados:**
+- `scripts/fetch_ml_browser.py` — novo fetcher (agent-browser)
+- `scripts/tests/test_ml_browser.py` — 17 testes unitários
+- `scripts/scan_deals.py` — atualizado para usar browser fetcher para ML
 
 ### Passo 2: Implementar envio automático para WhatsApp
 **Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web, com a mensagem como legenda da imagem para melhor experiência do usuário.
@@ -159,9 +172,10 @@ Configuradas em `scan_deals.py` (variável `GAMER_QUERIES`):
 9. **Deduplicação cross-session** — `sent_deals.json` com limpeza automática (7 dias)
 10. **Testes automatizados** — 79 testes unitários para parsers, utils e geração de links afiliados
 11. **Links afiliados Amazon BR** — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` via `build_affiliate_url()` — **funcionando**
-12. **Links afiliados Mercado Livre** — Parâmetros prontos, mas URLs construídas do ID são frágeis — **precisa agent browser para extrair links reais**
-13. **Correção URL ML** — `produto.mercadolivre.com.br/MLB_ID` (404) corrigido para `produto.mercadolivre.com.br/MLB-{number}-_JM` (hífen obrigatório) — ainda não 100% confiável
+12. **Links afiliados Mercado Livre** — Parâmetros prontos, URLs extraídas do HTML renderizado via agent-browser — **funcionando**
+13. **Correção URL ML** — agent-browser substitui construção frágil de URLs por extração de links reais do JavaScript renderizado
 14. **Imagem removida do texto da mensagem** — `image_url` mantido no dict para uso futuro por `send_to_whatsapp.py`, mas não aparece mais no texto
+15. **Agent-browser para ML** — `fetch_ml_browser.py` usa CLI Rust para renderizar páginas ML e extrair URLs reais com slug — **96 testes passando**
 
 ---
 
@@ -172,3 +186,4 @@ Configuradas em `scan_deals.py` (variável `GAMER_QUERIES`):
 | `37203b1` | Refactor: remove SQLite/Zoom pipeline, consolidate code, fix ML parser |
 | `c8384da` | Update CONTEXT.md and PLANO.md with simplified approach |
 | `4c823e4` | Add scan_deals.py - simplified approach without SQLite |
+| `HEAD` | Implement agent-browser for ML - real product URLs extracted from rendered HTML |
