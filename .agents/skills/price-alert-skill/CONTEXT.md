@@ -24,12 +24,13 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
 │   ├── extraction-rules-mercadolivre.md  # Regras de parsing ML
 │   └── output-schema.md             # Schema de saída dos fetchers
 └── scripts/
-    ├── config.py                   # Configuração (tags de afiliado)
+    ├── config.py                   # Configuração (tags de afiliado, credenciais login ML)
     ├── scrape_server.py             # Servidor Playwright (apenas Amazon)
     ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
     ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (extrai list_price + gera link afiliado)
     ├── fetch_ml_browser.py          # ★ Fetcher ML via agent-browser (links reais + afiliado)
     ├── fetch_mercadolivre_br.py     # Fetcher ML legado (HTML estático, fallback)
+    ├── generate_melila_links.py     # ★ Gerador de links meli.la via painel de afiliados
     ├── utils.py                     # Funções compartilhadas (emojis, formatação, templates, dedup)
     └── tests/                       # Testes unitários (96 testes)
         ├── test_utils.py            # Testes de utils
@@ -123,10 +124,27 @@ python3 -m pytest tests/ -v
 ### 7. Código duplicado consolidado
 - Funções compartilhadas em `scripts/utils.py` (emojis, formatação de preço, template de mensagem).
 
-### 8. Formato das mensagens WhatsApp
-- Preço antigo (Era:) exibido primeiro com strikethrough (`~~...~~`).
-- Preço atual (Hoje:) exibido abaixo.
+### 8. Formato das mensagens WhatsApp (atualizado 11/04/2026)
+- `% OFF` aparece primeiro (mais impactante).
+- `Antes:` sem strikethrough, linha separada.
+- `Hoje:` preço atual na última linha de preço.
 - Link do produto no final (WhatsApp gera preview com imagem automaticamente).
+- Links ML usam formato `meli.la` (gerados via painel de afiliados) quando possível.
+
+```
+{emoji} OFERTA DO DIA 👇
+
+{emoji} {NOME_PRODUTO}
+
+🔥 {PERCENTUAL}% OFF
+💰 Antes: R$ {PRECO_ANTERIOR}
+🎯 Hoje: R$ {PRECO_ATUAL}
+
+🛍️ Comprar aqui:
+{LINK}
+
+🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+```
 
 ### 9. Deduplicação cross-session
 - `data/sent_deals.json` armazena URLs de ofertas já processadas.
@@ -134,7 +152,7 @@ python3 -m pytest tests/ -v
 - Integrado no `scan_deals.py` — filtra antes de formatar mensagens.
 
 ### 10. Testes automatizados
-- 79 testes unitários cobrindo utils, parser Amazon (incluindo geração de links afiliados) e parser ML (incluindo geração de links afiliados).
+- 96 testes unitários cobrindo utils, parser Amazon (incluindo geração de links afiliados), parser ML (incluindo geração de links afiliados) e mensagens WhatsApp.
 - Rodar com: `python3 -m pytest tests/ -v`
 
 ### 11. Links afiliados — Amazon BR (implementado)
@@ -156,31 +174,33 @@ python3 -m pytest tests/ -v
 - `format_deal_message()` não inclui mais `📷 Imagem do produto: {URL}` no texto.
 - O campo `image_url` continua no dict do deal para uso futuro pelo `send_to_whatsapp.py` (Passo 2: enviar imagem como mídia com mensagem como legenda).
 
-```
-{emoji} OFERTA DO DIA 👇
+### 14. Links meli.la — geração via painel de afiliados (FUNCIONANDO via proxy)
+- **Problema original**: URLs longas com `?matt_word=...&matt_tool=...` não passam pelo endpoint `/social/` do ML, que é o sistema oficial de rastreamento de afiliados.
+- **Descoberta**: links `meli.la` redirecionam para `mercadolivre.com.br/social/{affiliate_name}?matt_word=...&matt_tool=...&ref=TOKEN_ASSINADO` — o `ref` é um token criptográfico gerado pelo ML que não pode ser forjado.
+- **Conclusão**: para ter certeza de que o rastreamento funciona, precisamos gerar links `meli.la` pelo painel de afiliados.
+- **matt_word e matt_tool verificados**: confirmados como corretos (`tb20240811145500` e `21915026`) via redirecionamento de link meli.la.
+- **Bloqueio IP**: servidor bloqueado pelo ML CloudFront (403). Solução: usar proxy residencial brasileiro.
+- **Gerador de Links**: em `mercadolivre.com.br/afiliados/linkbuilder`, aceita URLs no formato `https://www.mercadolivre.com.br/{slug}/p/MLB{id}`.
+- **Geração em lote**: suportada! Campo "Insira 1 ou mais URLs separados por 1 linha" aceita múltiplas URLs separadas por newline.
+- **Testado e funcionando**: geração individual e em lote de links meli.la via proxy.
 
-{emoji} {NOME_PRODUTO}
+### 15. Formato da mensagem atualizado (11/04/2026)
+- Alterado de `~~📉 Era: R$ X~~` → `💰 Antes: R$ X` (sem strikethrough)
+- Alterado de `🔥 Desconto: X% OFF` → `🔥 X% OFF` (simplificado)
+- Ordem alterada: % OFF primeiro, depois Antes/Hoje
+- Alinhado ao modelo de mensagem do cliente
 
-~~📉 Era: R$ {PRECO_ANTERIOR}~~
-🎯 Hoje: R$ {PRECO_ATUAL}
-🔥 Desconto: {PERCENTUAL}% OFF
-
-🛍️ Comprar aqui:
-{LINK}
-
-🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
-```
-
-## Status dos marketplaces (10/04/2026)
+## Status dos marketplaces (11/04/2026)
 | Marketplace | Status | Links afiliados | Observação |
 |---|---|---|---|
 | Amazon BR | Funcionando | Automático (`?tag=brunoentende-20`) | Extrai preço atual + preço anterior riscado |
-| Mercado Livre | Funcionando ✅ | Automático (`?matt_word=...&matt_tool=...`) | Agent-browser extrai links reais com slug do HTML renderizado |
+| Mercado Livre | Funcionando (via proxy) | meli.la gerado automaticamente via painel | IP do servidor bloqueado pelo ML; usar proxy residencial |
 | Shopee BR | Descartada (por ora) | N/A | Proteção anti-bot inviável sem login — agent browser pode viabilizar |
 
 ## Dependências adicionais
 - **agent-browser** — `npm install -g agent-browser` (CLI Rust para automação de browser)
 - **Chrome for Testing** — `agent-browser install` (baixa Chrome automaticamente)
+- **Proxy residencial** — IP do servidor é bloqueado pelo ML CloudFront. Usar variável de ambiente `ML_PROXY` ou flag `--proxy`
 - Note: agent-browser não depende do Playwright. É um binário Rust independente que gerencia seu próprio Chrome.
 
 ## Comandos úteis
@@ -199,4 +219,13 @@ python3 scan_deals.py --all --min-discount 10
 
 # Buscar com mais resultados
 python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
+
+# Buscar SEM geração de meli.la (usa URLs longas)
+python3 scan_deals.py "mouse gamer" --no-melila --min-discount 10
+
+# Gerar meli.la manualmente (com proxy)
+ML_PROXY="http://200.174.198.32:8888" python3 generate_melila_links.py --urls "https://www.mercadolivre.com.br/mouse-gamer/p/MLB123"
+
+# Login no painel de afiliados (com proxy, primeira vez)
+agent-browser --headed --session-name ml-affiliado --proxy "http://200.174.198.32:8888" open "https://www.mercadolivre.com.br/afiliados"
 ```

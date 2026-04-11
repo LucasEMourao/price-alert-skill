@@ -47,12 +47,13 @@ python3 scan_deals.py --all --min-discount 10
 | Fetcher Amazon | Extrai preço atual + preço anterior riscado (`list_price`) + **gera link afiliado automaticamente** |
 | Fetcher Mercado Livre | Parser reescrito para nova estrutura HTML — extrai preço atual + preço anterior riscado + **gera link afiliado** |
 | Script principal | `scan_deals.py` — busca ofertas e gera mensagens WhatsApp |
-| Formato das mensagens | Template com preço antigo riscado (`~~...~~`) acima do preço atual |
+| Formato das mensagens | Template atualizado: % OFF primeiro, depois "Antes:" e "Hoje:", links meli.la |
 | Categorias gamer | 12 queries de busca configuradas em `scan_deals.py` |
 | Código consolidado | `utils.py` com funções compartilhadas |
 | Deduplicação cross-session | `sent_deals.json` — evita repetir ofertas entre execuções (limpeza automática a cada 7 dias) |
 | **Links afiliados Amazon** | `config.py` + `build_affiliate_url()` em `fetch_amazon_br.py` — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` |
 | **Links afiliados ML** | `config.py` + `build_affiliate_url()` em `fetch_mercadolivre_br.py` — **FUNCIONANDO** via agent-browser (`fetch_ml_browser.py`) — extrai links reais do HTML renderizado |
+| **Links meli.la ML** | `generate_melila_links.py` — gera links meli.la via painel de afiliados do ML (com login automático, cache e fallback) |
 | Dependências | `requirements.txt` com fastapi, uvicorn, playwright + agent-browser (npm global) |
 | Testes automatizados | 96 testes unitários (utils, Amazon parser + afiliados, ML parser + afiliados, browser fetcher) |
 | Zoom/Shopee/SQLite | Removidos (pipeline legado descartado) |
@@ -66,9 +67,9 @@ python3 scan_deals.py --all --min-discount 10
 
 {emoji} {NOME_PRODUTO}
 
-~~📉 Era: R$ {PRECO_ANTERIOR}~~
+🔥 {PERCENTUAL}% OFF
+💰 Antes: R$ {PRECO_ANTERIOR}
 🎯 Hoje: R$ {PRECO_ATUAL}
-🔥 Desconto: {PERCENTUAL}% OFF
 
 🛍️ Comprar aqui:
 {LINK}
@@ -77,10 +78,12 @@ python3 scan_deals.py --all --min-discount 10
 ```
 
 **Regras:**
-- Preço antigo riscado aparece acima do preço atual (mais intuitivo)
-- `Era:` e `Desconto:` só aparecem quando desconto >= `--min-discount` (padrão: 10%)
+- `% OFF` aparece primeiro (mais impactante)
+- `Antes:` sem strikethrough, linha separada
+- `Hoje:` preço atual na última linha de preço
 - Se não houver preço anterior exibido, mostra apenas preço atual
 - Link do produto gera preview com imagem automaticamente no WhatsApp
+- Links ML usam formato `meli.la` (gerados via painel de afiliados) quando possível
 
 ---
 
@@ -118,7 +121,7 @@ python3 scan_deals.py --all --min-discount 10
 - `scripts/tests/test_ml_browser.py` — 17 testes unitários
 - `scripts/scan_deals.py` — atualizado para usar browser fetcher para ML
 
-### Passo 2: Implementar envio automático para WhatsApp
+### Passo 2: ~~Implementar envio automático para WhatsApp~~ ⏳ PAUSADO
 **Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web, com a mensagem como legenda da imagem para melhor experiência do usuário.
 
 **Estratégia escolhida: Imagem com legenda (melhor experiência)**
@@ -138,6 +141,46 @@ python3 scan_deals.py --all --min-discount 10
 **Dependências a adicionar:**
 - `selenium` ou `pywhatkit` para automação do WhatsApp Web
 - `requests` ou `httpx` para download das imagens
+
+### Passo 3: Gerar links meli.la via painel de afiliados ✅ FUNCIONANDO (via proxy)
+**Implementação concluída e testada em 11/04/2026.**
+
+**O que foi feito:**
+1. Criado `scripts/generate_melila_links.py` — módulo de geração de links meli.la via agent-browser
+2. Atualizado `scripts/config.py` — adicionado `ML_AFFILIATE_EMAIL`, `ML_AFFILIATE_PASSWORD` e `ML_PROXY`
+3. Atualizado `scripts/scan_deals.py` — integrado geração de meli.la com flag `--no-melila` para fallback
+4. Atualizado `scripts/utils.py` — formato da mensagem alterado (% OFF primeiro, "Antes:" sem strikethrough)
+5. Atualizado `scripts/tests/test_utils.py` — testes compatíveis com novo formato
+6. 96 testes passando
+
+**Descobertas sobre o Gerador de Links:**
+- URL: `mercadolivre.com.br/afiliados/linkbuilder`
+- Campo de texto: `textbox "Insira 1 ou mais URLs separados por 1 linha"` — aceita múltiplas URLs
+- Botão: `button "Gerar"` (desabilitado até URL ser preenchida)
+- Resultado: `textbox "Copie o link e comece a compartilhá-lo"` (singular) ou `textbox "Copie seus links e comece a compartilhá-los"` (plural)
+- Formato de URL aceito: `https://www.mercadolivre.com.br/{slug}/p/MLB{id}`
+- Links gerados: formato `https://meli.la/XXXXX`
+- Suporte a "Link curto" (meli.la) e "Link completo" (URL completa)
+
+**Como funciona:**
+- O `scan_deals.py` chama `generate_links()` após extrair deals
+- `generate_melila_links.py` navega até o Gerador de Links via agent-browser
+- Preenche o campo com as URLs dos produtos (uma por linha para múltiplas)
+- Clica "Gerar" e extrai os meli.la gerados
+- Cache em `data/melila_cache.json` evita regerar links já criados
+- Fallback: se geração falhar, usa URL longa com `matt_word`/`matt_tool`
+
+**Proxy obrigatório:**
+- IP do servidor é bloqueado pelo ML CloudFront (403)
+- Usar variável de ambiente `ML_PROXY` ou flag `--proxy` no agent-browser
+- Proxy gratuito para testes: `http://200.174.198.32:8888` (proxy brasileiro)
+
+**Arquivos criados/modificados:**
+- `scripts/generate_melila_links.py` — módulo de geração meli.la (refatorado com seletores corretos)
+- `scripts/config.py` — credenciais + proxy configurados
+- `scripts/scan_deals.py` — integração com meli.la + flag `--no-melila`
+- `scripts/utils.py` — formato da mensagem atualizado
+- `scripts/tests/test_utils.py` — testes atualizados
 
 ---
 
@@ -170,12 +213,17 @@ Configuradas em `scan_deals.py` (variável `GAMER_QUERIES`):
 7. **Imagem via link** — Link do produto no final gera preview automático no WhatsApp
 8. **Código Shopee removido** — ~225 linhas de endpoints de sessão/login removidos do scrape_server.py
 9. **Deduplicação cross-session** — `sent_deals.json` com limpeza automática (7 dias)
-10. **Testes automatizados** — 79 testes unitários para parsers, utils e geração de links afiliados
+10. **Testes automatizados** — 96 testes unitários para parsers, utils e geração de links afiliados
 11. **Links afiliados Amazon BR** — URLs sanitizadas para `/dp/{ASIN}?tag=brunoentende-20` via `build_affiliate_url()` — **funcionando**
 12. **Links afiliados Mercado Livre** — Parâmetros prontos, URLs extraídas do HTML renderizado via agent-browser — **funcionando**
 13. **Correção URL ML** — agent-browser substitui construção frágil de URLs por extração de links reais do JavaScript renderizado
 14. **Imagem removida do texto da mensagem** — `image_url` mantido no dict para uso futuro por `send_to_whatsapp.py`, mas não aparece mais no texto
 15. **Agent-browser para ML** — `fetch_ml_browser.py` usa CLI Rust para renderizar páginas ML e extrair URLs reais com slug — **96 testes passando**
+16. **Links meli.la via painel de afiliados** — `generate_melila_links.py` gera links meli.la automaticamente via agent-browser logado no painel de afiliados — **FUNCIONANDO via proxy**
+17. **Formato da mensagem atualizado** — % OFF primeiro, "Antes:" sem strikethrough, alinhado ao modelo do cliente
+18. **matt_word e matt_tool verificados** — Confirmados como corretos via redirecionamento de link meli.la
+19. **Proxy obrigatório para ML** — IP do servidor bloqueado pelo ML CloudFront; proxy residencial brasileiro necessário
+20. **Geração em lote de meli.la** — Gerador de Links aceita múltiplas URLs separadas por newline
 
 ---
 

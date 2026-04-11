@@ -1,10 +1,34 @@
 #!/usr/bin/env python3
 
-"""Configuration for affiliate link generation and marketplace settings."""
+"""Configuration for affiliate link generation and marketplace settings.
+
+Credentials are loaded from .env file (create from .env.example).
+Never commit .env to version control.
+"""
 
 import os
+from pathlib import Path
+
+# Load .env file if it exists
+_env_file = Path(__file__).resolve().parent.parent / ".env"
+if _env_file.exists():
+    for line in _env_file.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and value:
+                os.environ.setdefault(key, value)
 
 AMAZON_AFFILIATE_TAG = os.environ.get("AMAZON_AFFILIATE_TAG", "brunoentende-20")
 
-ML_MATT_WORD = os.environ.get("ML_MATT_WORD", "tb20240811145500")
-ML_MATT_TOOL = os.environ.get("ML_MATT_TOOL", "21915026")
+ML_MATT_WORD = os.environ.get("ML_MATT_WORD", "")
+ML_MATT_TOOL = os.environ.get("ML_MATT_TOOL", "")
+
+# ML Affiliate login credentials (loaded from .env)
+ML_AFFILIATE_EMAIL = os.environ.get("ML_AFFILIATE_EMAIL", "")
+ML_AFFILIATE_PASSWORD = os.environ.get("ML_AFFILIATE_PASSWORD", "")
+
+# Proxy for ML access (server IPs are blocked by ML CloudFront)
+ML_PROXY = os.environ.get("ML_PROXY", "")

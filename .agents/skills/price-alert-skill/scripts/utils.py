@@ -61,16 +61,30 @@ def calculate_discount(current_price: float, list_price: float) -> float | None:
 
 
 def format_deal_message(deal: dict[str, Any]) -> str:
-    """Format a single deal as WhatsApp message."""
+    """Format a single deal as WhatsApp message.
+
+    Format (matches client's preferred style):
+        🎸 OFERTA DO DIA 👇
+
+        🎚️ {PRODUCT TITLE}
+
+        🔥 {DISCOUNT}% OFF
+        💰 Antes: R$ {OLD PRICE}
+        🎯 Hoje: R$ {CURRENT PRICE}
+
+        🛍️ Comprar aqui:
+        {LINK}
+
+        🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+    """
     title = deal["title"]
     current_price = deal["current_price"]
     url = deal["url"]
     discount_pct = deal["discount_pct"]
     previous_price = deal.get("previous_price")
-    image_url = deal.get("image_url")
     query = deal.get("query", "")
 
-    emoji = detect_category_emoji(title, query)
+    category_emoji = detect_category_emoji(title, query)
 
     if len(title) > 120:
         title = title[:117] + "..."
@@ -78,9 +92,9 @@ def format_deal_message(deal: dict[str, Any]) -> str:
     price_today = format_price_brl(current_price)
 
     lines = [
-        f"{emoji} OFERTA DO DIA 👇",
+        f"{category_emoji} OFERTA DO DIA 👇",
         "",
-        f"{emoji} {title}",
+        f"{category_emoji} {title}",
     ]
 
     if previous_price and discount_pct:
@@ -88,9 +102,9 @@ def format_deal_message(deal: dict[str, Any]) -> str:
         discount_int = int(round(discount_pct))
         lines.extend([
             "",
-            f"~~📉 Era: {price_was}~~",
+            f"🔥 {discount_int}% OFF",
+            f"💰 Antes: {price_was}",
             f"🎯 Hoje: {price_today}",
-            f"🔥 Desconto: {discount_int}% OFF",
         ])
     else:
         lines.extend([

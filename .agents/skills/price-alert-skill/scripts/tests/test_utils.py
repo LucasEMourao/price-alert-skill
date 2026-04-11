@@ -102,9 +102,9 @@ class TestFormatDealMessage:
 
         assert "OFERTA DO DIA" in msg
         assert "Mouse Gamer Logitech G203" in msg
-        assert "~~📉 Era: R$ 199,90~~" in msg
+        assert "💰 Antes: R$ 199,90" in msg
         assert "🎯 Hoje: R$ 149,90" in msg
-        assert "🔥 Desconto: 25% OFF" in msg
+        assert "🔥 25% OFF" in msg
         assert "https://example.com/product" in msg
 
     def test_message_without_discount(self):
@@ -120,8 +120,8 @@ class TestFormatDealMessage:
         msg = format_deal_message(deal)
 
         assert "🎯 Hoje: R$ 99,90" in msg
-        assert "Era:" not in msg
-        assert "Desconto:" not in msg
+        assert "Antes:" not in msg
+        assert "% OFF" not in msg
 
     def test_message_without_image_url_in_text(self):
         deal = {

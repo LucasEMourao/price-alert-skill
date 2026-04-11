@@ -10,7 +10,7 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros.
 - Busca resultados na Amazon BR e Mercado Livre
 - Extrai preco atual e preco anterior riscado (quando exibido pelo marketplace)
 - Filtra produtos com desconto acima de um limite minimo
-- **Gera links de afiliado automaticamente para Amazon BR** (`?tag=brunoentende-20`) **e Mercado Livre** (`?matt_word=...&matt_tool=...`)
+- **Gera links de afiliado automaticamente para Amazon BR** (`?tag=brunoentende-20`) **e Mercado Livre** (links `meli.la` via painel de afiliados)
 - Gera mensagens formatadas para WhatsApp prontas para copiar/colar
 
 ## Comportamento Padrao
@@ -33,12 +33,13 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros.
 
 ## Scripts Principais
 
-- `scripts/config.py` — Configuracao (tags de afiliado, constantes)
+- `scripts/config.py` — Configuracao (tags de afiliado, credenciais de login ML)
 - `scripts/scrape_server.py` — Servidor Playwright com stealth (usado pela Amazon)
 - `scripts/scan_deals.py` — Script principal: busca ofertas e gera mensagens WhatsApp
 - `scripts/fetch_amazon_br.py` — Fetcher Amazon BR (extrai preco, gera link afiliado)
 - `scripts/fetch_ml_browser.py` — Fetcher Mercado Livre via agent-browser (links reais, gera link afiliado)
 - `scripts/fetch_mercadolivre_br.py` — Fetcher ML legado (HTML estático, mantido como fallback)
+- `scripts/generate_melila_links.py` — Gerador de links meli.la via painel de afiliados do ML
 - `scripts/utils.py` — Funcoes compartilhadas (emojis, formatacao de preco, template de mensagem)
 
 ## Comandos
@@ -64,6 +65,12 @@ python3 scripts/scan_deals.py "mouse gamer" --marketplaces mercadolivre_br --min
 
 # Buscar apenas na Amazon (requer scrape server rodando)
 python3 scripts/scan_deals.py --all --marketplaces amazon_br --min-discount 15
+
+# Buscar SEM geração de meli.la (usa URLs longas com matt_word/matt_tool)
+python3 scripts/scan_deals.py "mouse gamer" --no-melila --min-discount 10
+
+# Gerar meli.la manualmente para URLs específicas
+python3 scripts/generate_melila_links.py "https://produto.mercadolivre.com.br/MLB-XXXXX"
 ```
 
 ## Categorias Monitoradas
@@ -91,9 +98,9 @@ python3 scripts/scan_deals.py --all --marketplaces amazon_br --min-discount 15
 
 {emoji} {NOME_DO_PRODUTO}
 
-~~📉 Era: R$ {PRECO_ANTERIOR}~~
+🔥 {PERCENTUAL}% OFF
+💰 Antes: R$ {PRECO_ANTERIOR}
 🎯 Hoje: R$ {PRECO_ATUAL}
-🔥 Desconto: {PERCENTUAL}% OFF
 
 🛍️ Comprar aqui:
 {LINK}
@@ -124,12 +131,14 @@ O link do produto no final da mensagem gera automaticamente um preview com image
 - **Chromium** (Playwright): `playwright install chromium`
 - **agent-browser**: `npm install -g agent-browser && agent-browser install`
 - **Sistema**: `sudo apt install -y libnspr4 libnss3`
+- **Proxy residencial** (para ML): IP do servidor e bloqueado pelo ML CloudFront. Variavel de ambiente `ML_PROXY` ou flag `--proxy`.
 
 ## Guardrails
 
-- O servidor de scraping (`scripts/scrape_server.py`) deve estar rodando apenas para Amazon (`http://localhost:3000`). **ML usa agent-browser e não depende do servidor.**
+- O servidor de scraping (`scripts/scrape_server.py`) deve estar rodando apenas para Amazon (`http://localhost:3000`). **ML usa agent-browser e nao depende do servidor.**
 - Amazon BR gera links de afiliado automaticamente com tag `brunoentende-20` (configuravel via env var `AMAZON_AFFILIATE_TAG`). **Funcionando e testado.**
-- Mercado Livre extrai links reais via agent-browser (Chrome headless) e anexa `matt_word` e `matt_tool` automaticamente. **Funcionando e testado.**
+- Mercado Livre gera links `meli.la` automaticamente via painel de afiliados (agent-browser + proxy). **Funcionando e testado.**
+- Para ML, usar proxy residencial brasileiro via `ML_PROXY` (env var) ou `--proxy` (flag). Exemplo: `ML_PROXY="http://200.174.198.32:8888"`.
 - Shopee BR nao e suportada por enquanto (agent browser pode viabilizar no futuro).
 - Confiar nos descontos exibidos pelo proprio marketplace — nao ha validacao externa.
 - Se nao houver descontos relevantes, responder: `Sem descontos encontrados no momento.`
