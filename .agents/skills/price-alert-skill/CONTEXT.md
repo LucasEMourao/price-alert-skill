@@ -28,7 +28,7 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
     ├── scrape_server.py             # Servidor Playwright (LEGADO — não mais necessário)
     ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
     ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (Playwright direto + link afiliado)
-    ├── fetch_ml_browser.py          # ★ Fetcher ML via agent-browser (links reais + afiliado)
+    ├── fetch_ml_browser.py          # ★ Fetcher ML via agent-browser (links reais)
     ├── fetch_mercadolivre_br.py     # Fetcher ML legado (HTML estático, fallback)
     ├── generate_melila_links.py     # ★ Gerador de links meli.la via painel de afiliados
     ├── utils.py                     # Funções compartilhadas (emojis, formatação, templates, dedup)
@@ -77,9 +77,6 @@ python3 scan_deals.py --all --min-discount 10
 
 # Buscar apenas no Mercado Livre
 python3 scan_deals.py "mouse gamer" --marketplaces mercadolivre_br --min-discount 5
-
-# Buscar SEM geração de meli.la (usa URLs longas)
-python3 scan_deals.py "mouse gamer" --no-melila --min-discount 10
 ```
 
 ### 4. Resultado
@@ -141,7 +138,7 @@ python3 -m pytest tests/ -v
 🛍️ Comprar aqui:
 {LINK}
 
-🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+💸 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
 
 ### 9. Deduplicação cross-session
@@ -160,11 +157,11 @@ python3 -m pytest tests/ -v
 - Tag configurável via variável de ambiente `AMAZON_AFFILIATE_TAG` (default: `brunoentende-20`) ou editando `scripts/config.py`.
 - Implementação: função `build_affiliate_url()` em `fetch_amazon_br.py` + `config.py`.
 
-### 12. Links afiliados — Mercado Livre (RESOLVIDO com agent-browser)
+### 12. Links afiliados — Mercado Livre (RESOLVIDO com agent-browser + meli.la)
 - **Problema original**: URLs construídas a partir do ID MLB (`produto.mercadolivre.com.br/MLB-{number}-_JM`) não eram confiáveis — alguns IDs geravam página 404.
 - **Solução**: Implementado `fetch_ml_browser.py` que usa o **agent-browser** (CLI Rust) para renderizar a página com JavaScript e extrair os **links reais** do HTML renderizado.
 - URLs reais extraídas: `https://www.mercadolivre.com.br/{slug-do-produto}/p/MLB{id}` (ex: `https://www.mercadolivre.com.br/mouse-gamer-redragon-cobra-rgb-preto-preto/p/MLB8752191`).
-- Parâmetros de afiliado `matt_word=tb20240811145500` e `matt_tool=21915026` são anexados automaticamente.
+- Links ML são **sempre** convertidos para `meli.la` via painel de afiliados — URLs longas com `matt_word`/`matt_tool` não são mais usadas.
 - `scan_deals.py` agora usa `fetch_ml_browser.py` para ML em vez do servidor Playwright.
 - O fetcher antigo `fetch_mercadolivre_br.py` (baseado em HTML estático) é mantido como fallback.
 
@@ -173,10 +170,7 @@ python3 -m pytest tests/ -v
 - O campo `image_url` continua no dict do deal para uso futuro pelo `send_to_whatsapp.py` (Passo 2: enviar imagem como mídia com mensagem como legenda).
 
 ### 14. Links meli.la — geração via painel de afiliados (FUNCIONANDO via proxy)
-- **Problema original**: URLs longas com `?matt_word=...&matt_tool=...` não passam pelo endpoint `/social/` do ML, que é o sistema oficial de rastreamento de afiliados.
-- **Descoberta**: links `meli.la` redirecionam para `mercadolivre.com.br/social/{affiliate_name}?matt_word=...&matt_tool=...&ref=TOKEN_ASSINADO` — o `ref` é um token criptográfico gerado pelo ML que não pode ser forjado.
-- **Conclusão**: para ter certeza de que o rastreamento funciona, precisamos gerar links `meli.la` pelo painel de afiliados.
-- **matt_word e matt_tool verificados**: confirmados como corretos (`tb20240811145500` e `21915026`) via redirecionamento de link meli.la.
+- **Decisão**: Todos os links do Mercado Livre são convertidos para `meli.la` via painel de afiliados. URLs longas com `matt_word`/`matt_tool` foram removidas.
 - **Bloqueio IP**: servidor bloqueado pelo ML CloudFront (403). Solução: usar proxy residencial brasileiro.
 - **Gerador de Links**: em `mercadolivre.com.br/afiliados/linkbuilder`, aceita URLs no formato `https://www.mercadolivre.com.br/{slug}/p/MLB{id}`.
 - **Geração em lote**: suportada! Campo "Insira 1 ou mais URLs separados por 1 linha" aceita múltiplas URLs separadas por newline.
@@ -232,9 +226,6 @@ python3 scan_deals.py --all --min-discount 10
 
 # Buscar com mais resultados
 python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
-
-# Buscar SEM geração de meli.la (usa URLs longas)
-python3 scan_deals.py "mouse gamer" --no-melila --min-discount 10
 
 # Gerar meli.la manualmente (com proxy)
 ML_PROXY="http://200.174.198.32:8888" python3 generate_melila_links.py --urls "https://www.mercadolivre.com.br/mouse-gamer/p/MLB123"

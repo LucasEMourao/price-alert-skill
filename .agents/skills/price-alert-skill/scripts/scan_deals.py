@@ -133,7 +133,6 @@ def main() -> None:
     parser.add_argument("--max-results", type=int, default=15, help="Max results per marketplace/query")
     parser.add_argument("--min-discount", type=float, default=10.0, help="Minimum discount %% to include")
     parser.add_argument("--marketplaces", default="amazon_br,mercadolivre_br", help="Comma-separated marketplaces")
-    parser.add_argument("--no-melila", action="store_true", help="Skip meli.la link generation (use original URLs)")
     parser.add_argument("--output", help="Path to save messages JSON")
     args = parser.parse_args()
 
@@ -164,21 +163,20 @@ def main() -> None:
 
     print(f"\nTotal new deals: {len(unique_deals)}")
 
-    # Generate meli.la links for ML deals
-    if not args.no_melila:
-        ml_deals = [d for d in unique_deals if d["marketplace"] == "mercadolivre_br"]
-        if ml_deals:
-            ml_urls = [d["url"] for d in ml_deals]
-            print(f"\nGenerating meli.la links for {len(ml_urls)} ML deals...")
-            try:
-                melila_map = generate_links(ml_urls)
-                for deal in ml_deals:
-                    deal["url"] = melila_map.get(deal["url"], deal["url"])
-                generated = sum(1 for u in ml_urls if melila_map.get(u) and melila_map[u] != u)
-                print(f"  Generated {generated}/{len(ml_urls)} meli.la links")
-            except Exception as exc:
-                print(f"  WARNING: meli.la generation failed: {exc}")
-                print("  Falling back to original URLs")
+    # Generate meli.la links for ML deals (always)
+    ml_deals = [d for d in unique_deals if d["marketplace"] == "mercadolivre_br"]
+    if ml_deals:
+        ml_urls = [d["url"] for d in ml_deals]
+        print(f"\nGenerating meli.la links for {len(ml_urls)} ML deals...")
+        try:
+            melila_map = generate_links(ml_urls)
+            for deal in ml_deals:
+                deal["url"] = melila_map.get(deal["url"], deal["url"])
+            generated = sum(1 for u in ml_urls if melila_map.get(u) and melila_map[u] != u)
+            print(f"  Generated {generated}/{len(ml_urls)} meli.la links")
+        except Exception as exc:
+            print(f"  WARNING: meli.la generation failed: {exc}")
+            print("  Falling back to original URLs")
 
     # Format messages
     messages = []

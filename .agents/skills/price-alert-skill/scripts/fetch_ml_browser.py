@@ -24,7 +24,6 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote_plus
 
-from config import ML_MATT_WORD, ML_MATT_TOOL
 from fetch_mercadolivre_br import compute_confidence, parse_brl_from_label
 
 
@@ -159,16 +158,6 @@ def slugify_query(query: str) -> str:
     return re.sub(r"-{2,}", "-", re.sub(r"[^a-z0-9]+", "-", query.lower())).strip("-")
 
 
-def build_affiliate_url(url: str | None) -> str | None:
-    """Append ML affiliate parameters to a URL."""
-    if not url:
-        return None
-    if ML_MATT_WORD and ML_MATT_TOOL:
-        separator = "&" if "?" in url else "?"
-        return f"{url}{separator}matt_word={ML_MATT_WORD}&matt_tool={ML_MATT_TOOL}"
-    return url
-
-
 def _parse_products(raw_products: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert raw extracted data into normalized product dicts."""
     products: list[dict[str, Any]] = []
@@ -203,7 +192,7 @@ def _parse_products(raw_products: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "position": idx + 1,
             "asin": asin,
             "title": title,
-            "url": build_affiliate_url(url),
+            "url": url,
             "image_url": image_url,
             "price_text": f"R$ {current_price:.2f}".replace(".", ",") if current_price else None,
             "price": current_price,

@@ -117,7 +117,7 @@ def format_deal_message(deal: dict[str, Any]) -> str:
         "🛍️ Comprar aqui:",
         url,
         "",
-        "🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.",
+        "💸 Valores podem variar. Se entrar em estoque baixo, some rápido.",
     ])
 
     return "\n".join(lines)

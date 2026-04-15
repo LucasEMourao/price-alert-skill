@@ -1,10 +1,7 @@
 """Tests for Mercado Livre browser-based fetcher (agent-browser)."""
 
-from unittest.mock import patch
-
 from fetch_ml_browser import (
     _parse_products,
-    build_affiliate_url,
     slugify_query,
 )
 
@@ -21,33 +18,6 @@ class TestSlugifyQuery:
 
     def test_uppercase(self):
         assert slugify_query("Mouse GAMER") == "mouse-gamer"
-
-
-class TestBuildAffiliateUrl:
-    @patch("fetch_ml_browser.ML_MATT_WORD", "tb20240811145500")
-    @patch("fetch_ml_browser.ML_MATT_TOOL", "21915026")
-    def test_builds_affiliate_url(self):
-        url = build_affiliate_url("https://www.mercadolivre.com.br/mouse-gamer/p/MLB123456")
-        assert "matt_word=tb20240811145500" in url
-        assert "matt_tool=21915026" in url
-
-    @patch("fetch_ml_browser.ML_MATT_WORD", "tb20240811145500")
-    @patch("fetch_ml_browser.ML_MATT_TOOL", "21915026")
-    def test_builds_affiliate_url_with_existing_params(self):
-        url = build_affiliate_url(
-            "https://www.mercadolivre.com.br/mouse-gamer/p/MLB123?foo=bar"
-        )
-        assert "foo=bar" in url
-        assert "matt_word=tb20240811145500" in url
-
-    @patch("fetch_ml_browser.ML_MATT_WORD", "")
-    @patch("fetch_ml_browser.ML_MATT_TOOL", "")
-    def test_returns_plain_url_when_no_affiliate_config(self):
-        url = build_affiliate_url("https://www.mercadolivre.com.br/mouse-gamer/p/MLB123")
-        assert "matt_word" not in url
-
-    def test_returns_none_for_none_input(self):
-        assert build_affiliate_url(None) is None
 
 
 class TestParseProducts:
@@ -134,25 +104,6 @@ class TestParseProducts:
         assert len(products) == 1
         assert products[0]["url"] is not None
         assert "MLB12345678" in products[0]["url"]
-
-    def test_affiliate_params_appended(self):
-        raw = [
-            {
-                "title": "Mouse Gamer",
-                "url": "https://www.mercadolivre.com.br/mouse/p/MLB123",
-                "currentPriceLabel": "Agora: 100 reais",
-                "listPriceLabel": "Antes: 150 reais",
-                "image": None,
-                "asin": None,
-                "isSponsored": False,
-            }
-        ]
-        with patch("fetch_ml_browser.ML_MATT_WORD", "tb123"), \
-             patch("fetch_ml_browser.ML_MATT_TOOL", "456"):
-            products = _parse_products(raw)
-        assert len(products) == 1
-        assert "matt_word=tb123" in products[0]["url"]
-        assert "matt_tool=456" in products[0]["url"]
 
     def test_list_price_parsed(self):
         raw = [

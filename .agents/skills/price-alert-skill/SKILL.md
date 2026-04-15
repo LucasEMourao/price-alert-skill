@@ -37,7 +37,7 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros.
 - `scripts/scrape_server.py` — LEGADO — Servidor Playwright (nao mais necessario)
 - `scripts/scan_deals.py` — Script principal: busca ofertas e gera mensagens WhatsApp
 - `scripts/fetch_amazon_br.py` — Fetcher Amazon BR (Playwright direto + link afiliado)
-- `scripts/fetch_ml_browser.py` — Fetcher Mercado Livre via agent-browser (links reais, gera link afiliado)
+- `scripts/fetch_ml_browser.py` — Fetcher Mercado Livre via agent-browser (links reais)
 - `scripts/fetch_mercadolivre_br.py` — Fetcher ML legado (HTML estático, mantido como fallback)
 - `scripts/generate_melila_links.py` — Gerador de links meli.la via painel de afiliados do ML
 - `scripts/utils.py` — Funcoes compartilhadas (emojis, formatacao de preco, template de mensagem)
@@ -65,9 +65,6 @@ python3 scripts/scan_deals.py "mouse gamer" --marketplaces mercadolivre_br --min
 
 # Buscar apenas na Amazon
 python3 scripts/scan_deals.py --all --marketplaces amazon_br --min-discount 15
-
-# Buscar SEM geração de meli.la (usa URLs longas com matt_word/matt_tool)
-python3 scripts/scan_deals.py "mouse gamer" --no-melila --min-discount 10
 
 # Gerar meli.la manualmente para URLs específicas
 python3 scripts/generate_melila_links.py "https://produto.mercadolivre.com.br/MLB-XXXXX"
@@ -105,7 +102,7 @@ python3 scripts/generate_melila_links.py "https://produto.mercadolivre.com.br/ML
 🛍️ Comprar aqui:
 {LINK}
 
-🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+💸 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
 
 **Sem desconto exibido:**
@@ -119,7 +116,7 @@ python3 scripts/generate_melila_links.py "https://produto.mercadolivre.com.br/ML
 🛍️ Comprar aqui:
 {LINK}
 
-🎵 Valores podem variar. Se entrar em estoque baixo, some rápido.
+💸 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
 
 O link do produto no final da mensagem gera automaticamente um preview com imagem no WhatsApp.

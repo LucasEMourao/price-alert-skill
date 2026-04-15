@@ -1,9 +1,6 @@
 """Tests for Mercado Livre BR fetcher parser."""
 
-from unittest.mock import patch
-
 from fetch_mercadolivre_br import (
-    build_affiliate_url,
     extract_products_from_html,
     parse_brl_from_label,
     slugify_query,
@@ -127,27 +124,3 @@ class TestExtractProductsFromHtml:
 
         assert len(products) == 1
         assert products[0]["is_sponsored"] is True
-
-
-class TestBuildAffiliateUrl:
-    @patch("fetch_mercadolivre_br.ML_MATT_WORD", "tb20240811145500")
-    @patch("fetch_mercadolivre_br.ML_MATT_TOOL", "21915026")
-    def test_builds_affiliate_url(self):
-        url = build_affiliate_url("https://produto.mercadolivre.com.br/MLB-12345678-_JM")
-        assert url == "https://produto.mercadolivre.com.br/MLB-12345678-_JM?matt_word=tb20240811145500&matt_tool=21915026"
-
-    @patch("fetch_mercadolivre_br.ML_MATT_WORD", "tb20240811145500")
-    @patch("fetch_mercadolivre_br.ML_MATT_TOOL", "21915026")
-    def test_builds_affiliate_url_with_existing_params(self):
-        url = build_affiliate_url("https://produto.mercadolivre.com.br/MLB-12345678-_JM?some=param")
-        assert url == "https://produto.mercadolivre.com.br/MLB-12345678-_JM?some=param&matt_word=tb20240811145500&matt_tool=21915026"
-
-    @patch("fetch_mercadolivre_br.ML_MATT_WORD", "")
-    @patch("fetch_mercadolivre_br.ML_MATT_TOOL", "")
-    def test_returns_plain_url_when_no_affiliate_config(self):
-        url = build_affiliate_url("https://produto.mercadolivre.com.br/MLB-12345678-_JM")
-        assert url == "https://produto.mercadolivre.com.br/MLB-12345678-_JM"
-
-    def test_returns_none_for_none_input(self):
-        url = build_affiliate_url(None)
-        assert url is None

@@ -23,9 +23,6 @@ if _env_file.exists():
 
 AMAZON_AFFILIATE_TAG = os.environ.get("AMAZON_AFFILIATE_TAG", "brunoentende-20")
 
-ML_MATT_WORD = os.environ.get("ML_MATT_WORD", "")
-ML_MATT_TOOL = os.environ.get("ML_MATT_TOOL", "")
-
 # ML Affiliate login credentials (loaded from .env)
 ML_AFFILIATE_EMAIL = os.environ.get("ML_AFFILIATE_EMAIL", "")
 ML_AFFILIATE_PASSWORD = os.environ.get("ML_AFFILIATE_PASSWORD", "")
