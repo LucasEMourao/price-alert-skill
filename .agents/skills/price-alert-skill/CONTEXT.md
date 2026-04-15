@@ -25,9 +25,9 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
 │   └── output-schema.md             # Schema de saída dos fetchers
 └── scripts/
     ├── config.py                   # Configuração (tags de afiliado, credenciais login ML)
-    ├── scrape_server.py             # Servidor Playwright (apenas Amazon)
+    ├── scrape_server.py             # Servidor Playwright (LEGADO — não mais necessário)
     ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
-    ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (extrai list_price + gera link afiliado)
+    ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (Playwright direto + link afiliado)
     ├── fetch_ml_browser.py          # ★ Fetcher ML via agent-browser (links reais + afiliado)
     ├── fetch_mercadolivre_br.py     # Fetcher ML legado (HTML estático, fallback)
     ├── generate_melila_links.py     # ★ Gerador de links meli.la via painel de afiliados
@@ -41,10 +41,8 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
 
 ## Dependências
 - **Python 3.12+** (stdlib apenas)
-- **fastapi** — servidor HTTP (apenas para Amazon)
-- **uvicorn** — servidor ASGI (apenas para Amazon)
-- **playwright** — browser headless com stealth (apenas para Amazon)
-- **Chromium** — `playwright install chromium` (apenas para Amazon)
+- **playwright** — browser headless com stealth (Amazon — uso direto, sem servidor)
+- **Chromium** — `playwright install chromium` (Amazon)
 - **agent-browser** — CLI Rust para automação de browser (usado para ML)
 - **Chrome for Testing** — `agent-browser install` (gerenciado pelo agent-browser)
 - **Dependências de sistema**: `sudo apt install -y libnspr4 libnss3`
@@ -53,7 +51,7 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
 
 ### 1. Instalar dependências
 ```bash
-pip install fastapi uvicorn playwright
+pip install playwright
 playwright install chromium
 sudo apt install -y libnspr4 libnss3  # se necessário
 
@@ -62,26 +60,26 @@ npm install -g agent-browser
 agent-browser install  # Baixa Chrome for Testing
 ```
 
-### 2. Iniciar o servidor de scraping
+### 2. Login no ML (primeira vez ou quando sessão expirar)
 ```bash
 cd .agents/skills/price-alert-skill/scripts
-python3 scrape_server.py --port 3000
+ML_PROXY="http://200.174.198.32:8888" python3 generate_melila_links.py --login
+# Resolve CAPTCHA/2FA manualmente no browser headed, depois pressiona Enter
 ```
 
 ### 3. Buscar ofertas (script principal)
 ```bash
-# Buscar ofertas de uma categoria (ML não precisa do scrape server)
+# Buscar ofertas de uma categoria (Amazon + ML)
 python3 scan_deals.py "mouse gamer" --min-discount 10
 
 # Buscar TODAS as categorias gamer
 python3 scan_deals.py --all --min-discount 10
 
-# Buscar apenas no Mercado Livre (sem precisar do scrape server)
+# Buscar apenas no Mercado Livre
 python3 scan_deals.py "mouse gamer" --marketplaces mercadolivre_br --min-discount 5
 
-# Opções
-python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
-python3 scan_deals.py --all --marketplaces amazon_br --min-discount 15
+# Buscar SEM geração de meli.la (usa URLs longas)
+python3 scan_deals.py "mouse gamer" --no-melila --min-discount 10
 ```
 
 ### 4. Resultado
@@ -190,6 +188,21 @@ python3 -m pytest tests/ -v
 - Ordem alterada: % OFF primeiro, depois Antes/Hoje
 - Alinhado ao modelo de mensagem do cliente
 
+### 16. Scrape server eliminado — Playwright direto (14/04/2026)
+- **Problema**: `scrape_server.py` travava (hang) ao processar requisições da Amazon via FastAPI + Playwright async.
+- **Causa provável**: conflito entre event loops do uvicorn e do Playwright async dentro do mesmo processo.
+- **Solução**: `fetch_amazon_br.py` agora usa Playwright sync API diretamente, eliminando a necessidade do servidor.
+- `scrape_server.py` mantido como legado mas não é mais necessário para o funcionamento.
+- Dependências `fastapi` e `uvicorn` removidas dos requisitos.
+- `scan_deals.py` atualizado: `run()` da Amazon não recebe mais `api_base` e `scrape_endpoint`.
+
+### 17. Login ML via headed browser (14/04/2026)
+- ML agora exige CAPTCHA (reCAPTCHA de imagem) + verificação 2FA (código por email) no login.
+- Login automático não é mais viável — requer intervenção manual.
+- `generate_melila_links.py --login` abre browser headed para login manual.
+- Após login, a sessão do agent-browser é reutilizada para gerar links.
+- Seletores de input atualizados para serem mais flexíveis (busca por "insira", "url", "link").
+
 ## Status dos marketplaces (11/04/2026)
 | Marketplace | Status | Links afiliados | Observação |
 |---|---|---|---|
@@ -208,10 +221,10 @@ python3 -m pytest tests/ -v
 # Instalar agent-browser (primeira vez)
 npm install -g agent-browser && agent-browser install
 
-# Iniciar servidor de scraping (apenas para Amazon)
-python3 scrape_server.py --port 3000
+# Login manual no ML (primeira vez ou sessão expirou)
+ML_PROXY="http://200.174.198.32:8888" python3 generate_melila_links.py --login
 
-# Buscar ofertas de mouse gamer (ML usa agent-browser automaticamente)
+# Buscar ofertas (Amazon + ML) — não precisa mais do scrape server!
 python3 scan_deals.py "mouse gamer" --min-discount 10
 
 # Buscar todas as categorias gamer
@@ -226,6 +239,6 @@ python3 scan_deals.py "mouse gamer" --no-melila --min-discount 10
 # Gerar meli.la manualmente (com proxy)
 ML_PROXY="http://200.174.198.32:8888" python3 generate_melila_links.py --urls "https://www.mercadolivre.com.br/mouse-gamer/p/MLB123"
 
-# Login no painel de afiliados (com proxy, primeira vez)
-agent-browser --headed --session-name ml-affiliado --proxy "http://200.174.198.32:8888" open "https://www.mercadolivre.com.br/afiliados"
+# Rodar testes
+python3 -m pytest tests/ -v
 ```

@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import quote_plus
-from urllib.request import Request, urlopen
 
 from config import AMAZON_AFFILIATE_TAG
 
@@ -191,49 +190,49 @@ class AmazonSearchHTMLParser(HTMLParser):
             self.current["review_count_text"] = text
 
 
-def fetch_html_via_steel(
-    search_url: str,
-    api_base: str,
-    scrape_endpoint: str,
-    timeout_seconds: int,
-    delay_ms: int,
-) -> str:
-    payload = json.dumps({"url": search_url, "delay": delay_ms}).encode("utf-8")
-    request = Request(
-        url=f"{api_base.rstrip('/')}{scrape_endpoint}",
-        data=payload,
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
-        method="POST",
-    )
-    with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310
-        body = response.read().decode("utf-8")
-    return body
+_STEALTH_JS = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en-US', 'en'] });
+window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
+delete navigator.__proto__.webdriver;
+"""
 
 
-def extract_html_from_response(body: str) -> str:
-    try:
-        parsed = json.loads(body)
-    except json.JSONDecodeError:
-        return body
+def _fetch_html_playwright(search_url: str, delay_ms: int, timeout_seconds: int) -> str:
+    from playwright.sync_api import sync_playwright
 
-    if isinstance(parsed, dict):
-        for key in ("html", "markdown"):
-            value = parsed.get(key)
-            if isinstance(value, str) and "<" in value:
-                return value
-        if isinstance(parsed.get("content"), dict):
-            content = parsed["content"]
-            for key in ("html", "markdown", "content"):
-                value = content.get(key)
-                if isinstance(value, str) and "<" in value:
-                    return value
-        if isinstance(parsed.get("data"), dict):
-            nested = parsed["data"]
-            for key in ("html", "content"):
-                value = nested.get(key)
-                if isinstance(value, str) and "<" in value:
-                    return value
-    return body
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-infobars",
+                "--disable-gpu",
+                "--no-first-run",
+                "--no-default-browser-check",
+            ],
+        )
+        context = browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            locale="pt-BR",
+            timezone_id="America/Sao_Paulo",
+            extra_http_headers={
+                "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
+        )
+        context.add_init_script(_STEALTH_JS)
+        page = context.new_page()
+        page.goto(search_url, wait_until="domcontentloaded", timeout=timeout_seconds * 1000)
+        if delay_ms > 0:
+            page.wait_for_timeout(delay_ms)
+        html = page.content()
+        context.close()
+        browser.close()
+    return html
 
 
 def build_affiliate_url(asin: str | None, raw_url: str | None) -> str | None:
@@ -275,11 +274,9 @@ def normalize_products(raw_products: list[dict[str, Any]]) -> list[dict[str, Any
 
 def run(
     query: str,
-    api_base: str,
-    scrape_endpoint: str,
-    max_results: int,
-    timeout_seconds: int,
-    delay_ms: int,
+    max_results: int = 20,
+    timeout_seconds: int = 30,
+    delay_ms: int = 3000,
 ) -> dict[str, Any]:
     search_url = f"https://www.amazon.com.br/s?k={quote_plus(query)}"
     payload = {
@@ -292,20 +289,13 @@ def run(
     }
 
     try:
-        body = fetch_html_via_steel(
-            search_url=search_url,
-            api_base=api_base,
-            scrape_endpoint=scrape_endpoint,
-            timeout_seconds=timeout_seconds,
-            delay_ms=delay_ms,
-        )
-        html = extract_html_from_response(body)
+        html = _fetch_html_playwright(search_url, delay_ms, timeout_seconds)
         parser = AmazonSearchHTMLParser(max_results=max_results)
         parser.feed(html)
         payload["products"] = normalize_products(parser.products)
         if not payload["products"]:
             payload["errors"].append(
-                "No Amazon products extracted. Confirm the scrape endpoint returns HTML for the requested URL."
+                "No Amazon products extracted. The page may have anti-bot protection or the HTML structure changed."
             )
     except Exception as exc:  # noqa: BLE001
         payload["errors"].append(f"{type(exc).__name__}: {exc}")
@@ -314,19 +304,15 @@ def run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch Amazon Brasil search result prices via Steel API.")
+    parser = argparse.ArgumentParser(description="Fetch Amazon Brasil search result prices via Playwright.")
     parser.add_argument("query", help="Search query to run against amazon.com.br")
-    parser.add_argument("--api-base", default="http://localhost:3000", help="Steel API base URL")
-    parser.add_argument("--scrape-endpoint", default="/v1/scrape", help="Steel scrape endpoint path")
     parser.add_argument("--max-results", type=int, default=20, help="Maximum number of product cards to return")
-    parser.add_argument("--timeout-seconds", type=int, default=30, help="HTTP timeout for the scrape request")
-    parser.add_argument("--delay-ms", type=int, default=2500, help="Extra wait requested from Steel before capture")
+    parser.add_argument("--timeout-seconds", type=int, default=30, help="Page load timeout in seconds")
+    parser.add_argument("--delay-ms", type=int, default=3000, help="Extra wait before capturing HTML (ms)")
     args = parser.parse_args()
 
     result = run(
         query=args.query,
-        api_base=args.api_base,
-        scrape_endpoint=args.scrape_endpoint,
         max_results=args.max_results,
         timeout_seconds=args.timeout_seconds,
         delay_ms=args.delay_ms,

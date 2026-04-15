@@ -91,13 +91,12 @@ def extract_deals_from_products(
 def scan_marketplace(
     marketplace: str,
     query: str,
-    api_base: str,
     max_results: int,
     min_discount: float,
 ) -> list[dict[str, Any]]:
     """Scan a single marketplace for deals."""
     if marketplace == "amazon_br":
-        result = run_amazon(query, api_base, "/v1/scrape", max_results, 30, 2500)
+        result = run_amazon(query=query, max_results=max_results)
     elif marketplace == "mercadolivre_br":
         result = run_mercadolivre_browser(query=query, max_results=max_results)
     else:
@@ -108,7 +107,6 @@ def scan_marketplace(
 
 
 def scan_all(
-    api_base: str,
     max_results: int,
     min_discount: float,
     marketplaces: list[str],
@@ -119,7 +117,7 @@ def scan_all(
     for query in queries:
         for marketplace in marketplaces:
             try:
-                deals = scan_marketplace(marketplace, query, api_base, max_results, min_discount)
+                deals = scan_marketplace(marketplace, query, max_results, min_discount)
                 if deals:
                     print(f"  ✓ {marketplace} / {query}: {len(deals)} deals found")
                 all_deals.extend(deals)
@@ -132,7 +130,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Scan marketplaces for products with displayed discounts.")
     parser.add_argument("query", nargs="?", help="Search query (omit if using --all)")
     parser.add_argument("--all", action="store_true", help="Scan all gamer categories")
-    parser.add_argument("--api-base", default="http://localhost:3000", help="Scrape server URL")
     parser.add_argument("--max-results", type=int, default=15, help="Max results per marketplace/query")
     parser.add_argument("--min-discount", type=float, default=10.0, help="Minimum discount %% to include")
     parser.add_argument("--marketplaces", default="amazon_br,mercadolivre_br", help="Comma-separated marketplaces")
@@ -149,7 +146,7 @@ def main() -> None:
     now = datetime.now(timezone.utc)
     print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Scanning for deals (min {args.min_discount}% off)...\n")
 
-    deals = scan_all(args.api_base, args.max_results, args.min_discount, marketplaces, queries)
+    deals = scan_all(args.max_results, args.min_discount, marketplaces, queries)
 
     # Deduplicate by URL (within this run)
     seen_urls = set()

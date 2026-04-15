@@ -27,16 +27,16 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros.
 
 ## Fluxo
 
-1. Inicie o servidor de scraping: `python3 scripts/scrape_server.py --port 3000`
+1. (Primeira vez) Login no ML: `python3 scripts/generate_melila_links.py --login`
 2. Rode `scripts/scan_deals.py` com a query desejada ou `--all` para todas as categorias.
 3. As mensagens sao exibidas no terminal e salvas em `data/messages/deals_*.json`.
 
 ## Scripts Principais
 
 - `scripts/config.py` — Configuracao (tags de afiliado, credenciais de login ML)
-- `scripts/scrape_server.py` — Servidor Playwright com stealth (usado pela Amazon)
+- `scripts/scrape_server.py` — LEGADO — Servidor Playwright (nao mais necessario)
 - `scripts/scan_deals.py` — Script principal: busca ofertas e gera mensagens WhatsApp
-- `scripts/fetch_amazon_br.py` — Fetcher Amazon BR (extrai preco, gera link afiliado)
+- `scripts/fetch_amazon_br.py` — Fetcher Amazon BR (Playwright direto + link afiliado)
 - `scripts/fetch_ml_browser.py` — Fetcher Mercado Livre via agent-browser (links reais, gera link afiliado)
 - `scripts/fetch_mercadolivre_br.py` — Fetcher ML legado (HTML estático, mantido como fallback)
 - `scripts/generate_melila_links.py` — Gerador de links meli.la via painel de afiliados do ML
@@ -46,24 +46,24 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros.
 
 ```bash
 # Instalar dependências (primeira vez)
-pip install fastapi uvicorn playwright
+pip install playwright
 playwright install chromium
 npm install -g agent-browser
 agent-browser install
 
-# Iniciar servidor de scraping (necessário apenas para Amazon)
-python3 scripts/scrape_server.py --port 3000
+# Login manual no ML (primeira vez ou sessão expirou)
+python3 scripts/generate_melila_links.py --login
 
-# Buscar ofertas de uma categoria (ML usa agent-browser, Amazon usa scrape server)
+# Buscar ofertas de uma categoria (Amazon + ML)
 python3 scripts/scan_deals.py "mouse gamer" --min-discount 10
 
 # Varrer todas as categorias gamer
 python3 scripts/scan_deals.py --all --min-discount 10
 
-# Buscar apenas no Mercado Livre (não precisa do scrape server)
+# Buscar apenas no Mercado Livre
 python3 scripts/scan_deals.py "mouse gamer" --marketplaces mercadolivre_br --min-discount 5
 
-# Buscar apenas na Amazon (requer scrape server rodando)
+# Buscar apenas na Amazon
 python3 scripts/scan_deals.py --all --marketplaces amazon_br --min-discount 15
 
 # Buscar SEM geração de meli.la (usa URLs longas com matt_word/matt_tool)
@@ -127,7 +127,7 @@ O link do produto no final da mensagem gera automaticamente um preview com image
 ## Dependencias
 
 - **Python 3.12+**
-- **fastapi**, **uvicorn**, **playwright** (apenas para Amazon)
+- **playwright** (Amazon — uso direto, sem servidor)
 - **Chromium** (Playwright): `playwright install chromium`
 - **agent-browser**: `npm install -g agent-browser && agent-browser install`
 - **Sistema**: `sudo apt install -y libnspr4 libnss3`
@@ -135,9 +135,8 @@ O link do produto no final da mensagem gera automaticamente um preview com image
 
 ## Guardrails
 
-- O servidor de scraping (`scripts/scrape_server.py`) deve estar rodando apenas para Amazon (`http://localhost:3000`). **ML usa agent-browser e nao depende do servidor.**
-- Amazon BR gera links de afiliado automaticamente com tag `brunoentende-20` (configuravel via env var `AMAZON_AFFILIATE_TAG`). **Funcionando e testado.**
-- Mercado Livre gera links `meli.la` automaticamente via painel de afiliados (agent-browser + proxy). **Funcionando e testado.**
+- **Amazon BR** usa Playwright direto (sem servidor). Gera links de afiliado automaticamente com tag `brunoentende-20` (configuravel via env var `AMAZON_AFFILIATE_TAG`). **Funcionando e testado.**
+- **Mercado Livre** gera links `meli.la` automaticamente via painel de afiliados (agent-browser + proxy). **Requer login manual** (`--login`) para resolver CAPTCHA/2FA. **Funcionando e testado.**
 - Para ML, usar proxy residencial brasileiro via `ML_PROXY` (env var) ou `--proxy` (flag). Exemplo: `ML_PROXY="http://200.174.198.32:8888"`.
 - Shopee BR nao e suportada por enquanto (agent browser pode viabilizar no futuro).
 - Confiar nos descontos exibidos pelo proprio marketplace — nao ha validacao externa.
