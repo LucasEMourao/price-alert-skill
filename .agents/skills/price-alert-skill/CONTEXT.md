@@ -147,7 +147,7 @@ python3 -m pytest tests/ -v
 - Integrado no `scan_deals.py` — filtra antes de formatar mensagens.
 
 ### 10. Testes automatizados
-- 96 testes unitários cobrindo utils, parser Amazon (incluindo geração de links afiliados), parser ML (incluindo geração de links afiliados) e mensagens WhatsApp.
+- 102 testes unitários cobrindo utils, parser Amazon (incluindo geração de links afiliados), parser ML (incluindo geração de links afiliados), mensagens WhatsApp e envio automático para WhatsApp.
 - Rodar com: `python3 -m pytest tests/ -v`
 
 ### 11. Links afiliados — Amazon BR (implementado)
@@ -197,7 +197,17 @@ python3 -m pytest tests/ -v
 - Após login, a sessão do agent-browser é reutilizada para gerar links.
 - Seletores de input atualizados para serem mais flexíveis (busca por "insira", "url", "link").
 
-## Status dos marketplaces (11/04/2026)
+### 18. Envio automático para WhatsApp via Playwright (15/04/2026)
+- **Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web.
+- **Decisão:** Usar Playwright (já instalado) em vez de Selenium ou Baileys.
+- **Imagens:** Download feito no momento do envio usando URL `image_url` extraída durante scraping.
+- **Envio:** Imagem como mídia com a mensagem formatada como legenda.
+- **Sessão:** Persistente em `data/whatsapp_session/` — QR code apenas na primeira vez.
+- **Integração:** Flags `--send-whatsapp` e `--whatsapp-group` no `scan_deals.py`.
+- **Arquivo:** `scripts/send_to_whatsapp.py` — pode ser usado standalone ou integrado.
+- **Testes:** 15 testes unitários adicionados. Total: 102 testes passando.
+
+## Status dos marketplaces (15/04/2026)
 | Marketplace | Status | Links afiliados | Observação |
 |---|---|---|---|
 | Amazon BR | Funcionando | Automático (`?tag=brunoentende-20`) | Extrai preço atual + preço anterior riscado |
@@ -229,6 +239,15 @@ python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
 
 # Gerar meli.la manualmente (com proxy)
 ML_PROXY="http://200.174.198.32:8888" python3 generate_melila_links.py --urls "https://www.mercadolivre.com.br/mouse-gamer/p/MLB123"
+
+# Enviar ofertas para WhatsApp (primeira vez — headed para QR)
+python3 scan_deals.py "mouse gamer" --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Ofertas" --headed
+
+# Enviar ofertas após sessão inicial
+python3 scan_deals.py --all --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Ofertas"
+
+# Usar script de envio diretamente
+python3 send_to_whatsapp.py --group "Grupo de Ofertas" --deals data/messages/deals_*.json
 
 # Rodar testes
 python3 -m pytest tests/ -v

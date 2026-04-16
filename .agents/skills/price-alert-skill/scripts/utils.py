@@ -103,7 +103,7 @@ def format_deal_message(deal: dict[str, Any]) -> str:
         lines.extend([
             "",
             f"🔥 {discount_int}% OFF",
-            f"💰 Antes: {price_was}",
+            f"💰 Antes: ~{price_was}~",
             f"🎯 Hoje: {price_today}",
         ])
     else:

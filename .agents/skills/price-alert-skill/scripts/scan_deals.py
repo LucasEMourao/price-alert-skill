@@ -134,6 +134,9 @@ def main() -> None:
     parser.add_argument("--min-discount", type=float, default=10.0, help="Minimum discount %% to include")
     parser.add_argument("--marketplaces", default="amazon_br,mercadolivre_br", help="Comma-separated marketplaces")
     parser.add_argument("--output", help="Path to save messages JSON")
+    parser.add_argument("--send-whatsapp", action="store_true", help="Send deals to WhatsApp after scanning")
+    parser.add_argument("--whatsapp-group", default="", help="WhatsApp group name (default: first group found)")
+    parser.add_argument("--headed", action="store_true", help="Open browser window for WhatsApp (needed for first-time QR scan)")
     args = parser.parse_args()
 
     if not args.query and not args.all:
@@ -188,6 +191,7 @@ def main() -> None:
             "current_price": deal["current_price"],
             "discount_pct": deal["discount_pct"],
             "url": deal["url"],
+            "image_url": deal.get("image_url"),
             "message": message,
         })
 
@@ -209,6 +213,36 @@ def main() -> None:
             print(f"{'='*50}")
     else:
         print("No deals found matching criteria.")
+
+    # Send to WhatsApp if requested
+    if args.send_whatsapp and messages:
+        from send_to_whatsapp import send_deals_to_whatsapp
+
+        group = args.whatsapp_group
+        if not group:
+            parser.error("--whatsapp-group is required when using --send-whatsapp")
+
+        print(f"\nSending {len(messages)} deal(s) to WhatsApp group: {group}...")
+
+        deals_for_whatsapp = []
+        for msg, deal in zip(messages, unique_deals):
+            deals_for_whatsapp.append({
+                "title": msg["title"],
+                "url": msg["url"],
+                "image_url": deal.get("image_url"),
+                "message": msg["message"],
+            })
+
+        results = send_deals_to_whatsapp(
+            deals=deals_for_whatsapp,
+            group_name=group,
+            headed=args.headed,
+        )
+
+        print(f"\nWhatsApp results: {results['sent']} sent, {results['failed']} failed")
+        if results["errors"]:
+            for err in results["errors"]:
+                print(f"  - {err['title']}: {err['reason']}")
 
 
 if __name__ == "__main__":

@@ -119,26 +119,38 @@ python3 scan_deals.py --all --min-discount 10
 - `scripts/tests/test_ml_browser.py` — 17 testes unitários
 - `scripts/scan_deals.py` — atualizado para usar browser fetcher para ML
 
-### Passo 2: ~~Implementar envio automático para WhatsApp~~ ⏳ PAUSADO
-**Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web, com a mensagem como legenda da imagem para melhor experiência do usuário.
+### Passo 2: ~~Implementar envio automático para WhatsApp~~ ✅ Concluído
+**Implementação concluída em 15/04/2026.**
 
-**Estratégia escolhida: Imagem com legenda (melhor experiência)**
-1. Baixar imagem do produto antes de enviar
-2. Enviar a imagem como mídia no WhatsApp Web (via Selenium/Playwright) **com a mensagem formatada como legenda**
-3. Repetir para cada produto
+**O que foi feito:**
+1. Criado `scripts/send_to_whatsapp.py` — módulo de envio via WhatsApp Web com Playwright
+2. Integração com `scan_deals.py` — flags `--send-whatsapp` e `--whatsapp-group`
+3. Download automático de imagens dos produtos durante o envio
+4. Envio de imagens como mídia com a mensagem formatada como legenda
+5. Sessão persistente — QR code escaneado apenas na primeira vez
+6. 15 testes unitários para o novo módulo
 
-**Benefícios desta abordagem:**
-- Experiência mais natural no WhatsApp (como quando enviamos fotos com legenda manualmente)
-- Apenas uma notificação em vez de duas
-- Imagem e texto permanecem visualmente agrupados
-- Link na legenda ainda gera preview automaticamente no WhatsApp
+**Como funciona:**
+- O `scan_deals.py` busca ofertas normalmente
+- Com `--send-whatsapp --whatsapp-group "Nome do Grupo"`, envia automaticamente
+- Na primeira vez: use `--headed` para escanear o QR code
+- Sessão salva em `data/whatsapp_session/` para reutilização
 
-**Arquivos a criar:**
-- `scripts/send_to_whatsapp.py` — script de envio via WhatsApp Web
+**Comandos:**
+```bash
+# Enviar ofertas para WhatsApp (primeira vez — headed para QR)
+python3 scan_deals.py "mouse gamer" --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Ofertas" --headed
 
-**Dependências a adicionar:**
-- `selenium` ou `pywhatkit` para automação do WhatsApp Web
-- `requests` ou `httpx` para download das imagens
+# Enviar após sessão inicial
+python3 scan_deals.py --all --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Ofertas"
+
+# Usar diretamente o script de envio
+python3 send_to_whatsapp.py --group "Grupo de Ofertas" --deals data/messages/deals_*.json
+```
+
+**Dependências adicionadas:**
+- `requests` para download de imagens
+- Playwright já estava instalado (reutilizado)
 
 ### Passo 3: Gerar links meli.la via painel de afiliados ✅ FUNCIONANDO (sempre ativo)
 **Implementação concluída e testada em 11/04/2026.**
