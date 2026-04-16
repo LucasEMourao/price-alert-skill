@@ -102,7 +102,7 @@ class TestFormatDealMessage:
 
         assert "OFERTA DO DIA" in msg
         assert "Mouse Gamer Logitech G203" in msg
-        assert "💰 Antes: R$ 199,90" in msg
+        assert "💰 Antes: ~R$ 199,90~" in msg
         assert "🎯 Hoje: R$ 149,90" in msg
         assert "🔥 25% OFF" in msg
         assert "https://example.com/product" in msg

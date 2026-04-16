@@ -39,7 +39,7 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros.
 - `scripts/scrape_server.py` — LEGADO — Servidor Playwright (nao mais necessario)
 - `scripts/scan_deals.py` — Script principal: busca ofertas e gera mensagens WhatsApp
 - `scripts/fetch_amazon_br.py` — Fetcher Amazon BR (Playwright direto + link afiliado)
-- `scripts/fetch_ml_browser.py` — Fetcher Mercado Livre via agent-browser (links reais)
+- `scripts/fetch_ml_browser.py` — Fetcher Mercado Livre via Playwright (JS injection no DOM)
 - `scripts/fetch_mercadolivre_br.py` — Fetcher ML legado (HTML estático, mantido como fallback)
 - `scripts/generate_melila_links.py` — Gerador de links meli.la via painel de afiliados do ML
 - `scripts/send_to_whatsapp.py` — Envio automático para WhatsApp via Playwright (★ NOVO)
@@ -51,35 +51,6 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros.
 # Instalar dependências (primeira vez)
 pip install playwright
 playwright install chromium
-npm install -g agent-browser
-agent-browser install
-
-# Login manual no ML (primeira vez ou sessão expirou)
-python3 scripts/generate_melila_links.py --login
-
-# Buscar ofertas de uma categoria (Amazon + ML)
-python3 scripts/scan_deals.py "mouse gamer" --min-discount 10
-
-# Varrer todas as categorias gamer
-python3 scripts/scan_deals.py --all --min-discount 10
-
-# Buscar apenas no Mercado Livre
-python3 scripts/scan_deals.py "mouse gamer" --marketplaces mercadolivre_br --min-discount 5
-
-# Buscar apenas na Amazon
-python3 scripts/scan_deals.py --all --marketplaces amazon_br --min-discount 15
-
-# Gerar meli.la manualmente para URLs específicas
-python3 scripts/generate_melila_links.py "https://produto.mercadolivre.com.br/MLB-XXXXX"
-
-# Enviar ofertas para WhatsApp (primeira vez — headed para QR)
-python3 scripts/scan_deals.py "mouse gamer" --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Ofertas" --headed
-
-# Enviar ofertas após sessão inicial
-python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Ofertas"
-
-# Usar script de envio diretamente
-python3 scripts/send_to_whatsapp.py --group "Grupo de Ofertas" --deals data/messages/deals_*.json
 ```
 
 ## Categorias Monitoradas
@@ -138,18 +109,15 @@ O link do produto no final da mensagem gera automaticamente um preview com image
 ## Dependencias
 
 - **Python 3.12+**
-- **playwright** (Amazon + WhatsApp — uso direto, sem servidor)
+- **playwright** (Amazon + ML + WhatsApp — uso direto, sem servidor)
 - **Chromium** (Playwright): `playwright install chromium`
 - **requests** (download de imagens para WhatsApp)
-- **agent-browser**: `npm install -g agent-browser && agent-browser install`
 - **Sistema**: `sudo apt install -y libnspr4 libnss3`
-- **Proxy residencial** (para ML): IP do servidor e bloqueado pelo ML CloudFront. Variavel de ambiente `ML_PROXY` ou flag `--proxy`.
 
 ## Guardrails
 
 - **Amazon BR** usa Playwright direto (sem servidor). Gera links de afiliado automaticamente com tag `brunoentende-20` (configuravel via env var `AMAZON_AFFILIATE_TAG`). **Funcionando e testado.**
-- **Mercado Livre** gera links `meli.la` automaticamente via painel de afiliados (agent-browser + proxy). **Requer login manual** (`--login`) para resolver CAPTCHA/2FA. **Funcionando e testado.**
-- Para ML, usar proxy residencial brasileiro via `ML_PROXY` (env var) ou `--proxy` (flag). Exemplo: `ML_PROXY="http://200.174.198.32:8888"`.
+- **Mercado Livre** usa Playwright direto com JS injection no DOM para extrair produtos. Gera links `meli.la` automaticamente via painel de afiliados. **Requer login manual** (`--login`) para resolver CAPTCHA/2FA. **Funcionando e testado.**
 - **WhatsApp Web** envio automático via Playwright. **Requer login manual** na primeira vez (`--headed`). Sessão persiste em `data/whatsapp_session/chrome_profile/` (perfil completo do Chrome com IndexedDB). **Funcionando e testado.**
   - Envia imagem do produto + legenda formatada (com preço antigo riscado via `~`)
   - Delay de 5s entre mensagens para evitar rate limit

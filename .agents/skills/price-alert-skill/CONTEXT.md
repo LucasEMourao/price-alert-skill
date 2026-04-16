@@ -28,7 +28,7 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
     ├── scrape_server.py             # Servidor Playwright (LEGADO — não mais necessário)
     ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
     ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (Playwright direto + link afiliado)
-    ├── fetch_ml_browser.py          # ★ Fetcher ML via agent-browser (links reais)
+    ├── fetch_ml_browser.py          # ★ Fetcher ML via Playwright (JS injection no DOM)
     ├── fetch_mercadolivre_br.py     # Fetcher ML legado (HTML estático, fallback)
     ├── generate_melila_links.py     # ★ Gerador de links meli.la via painel de afiliados
     ├── utils.py                     # Funções compartilhadas (emojis, formatação, templates, dedup)
@@ -36,15 +36,13 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
         ├── test_utils.py            # Testes de utils
         ├── test_amazon.py           # Testes do parser Amazon (inclui build_affiliate_url)
         ├── test_mercadolivre.py     # Testes do parser ML legado
-        └── test_ml_browser.py       # ★ Testes do fetcher agent-browser
+        └── test_ml_browser.py       # ★ Testes do fetcher ML (Playwright)
 ```
 
 ## Dependências
 - **Python 3.12+** (stdlib apenas)
-- **playwright** — browser headless com stealth (Amazon — uso direto, sem servidor)
-- **Chromium** — `playwright install chromium` (Amazon)
-- **agent-browser** — CLI Rust para automação de browser (usado para ML)
-- **Chrome for Testing** — `agent-browser install` (gerenciado pelo agent-browser)
+- **playwright** — browser headless com stealth (Amazon + ML + WhatsApp)
+- **Chromium** — `playwright install chromium`
 - **Dependências de sistema**: `sudo apt install -y libnspr4 libnss3`
 
 ## Como usar (fluxo atual)
@@ -54,10 +52,6 @@ A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (A
 pip install playwright
 playwright install chromium
 sudo apt install -y libnspr4 libnss3  # se necessário
-
-# Agent-browser (para Mercado Livre — links reais)
-npm install -g agent-browser
-agent-browser install  # Baixa Chrome for Testing
 ```
 
 ### 2. Login no ML (primeira vez ou quando sessão expirar)
@@ -157,9 +151,9 @@ python3 -m pytest tests/ -v
 - Tag configurável via variável de ambiente `AMAZON_AFFILIATE_TAG` (default: `brunoentende-20`) ou editando `scripts/config.py`.
 - Implementação: função `build_affiliate_url()` em `fetch_amazon_br.py` + `config.py`.
 
-### 12. Links afiliados — Mercado Livre (RESOLVIDO com agent-browser + meli.la)
+### 12. Links afiliados — Mercado Livre (RESOLVIDO com Playwright + meli.la)
 - **Problema original**: URLs construídas a partir do ID MLB (`produto.mercadolivre.com.br/MLB-{number}-_JM`) não eram confiáveis — alguns IDs geravam página 404.
-- **Solução**: Implementado `fetch_ml_browser.py` que usa o **agent-browser** (CLI Rust) para renderizar a página com JavaScript e extrair os **links reais** do HTML renderizado.
+- **Solução**: `fetch_ml_browser.py` usa **Playwright** para renderizar a página com JavaScript e extrair os **links reais** do DOM via `page.evaluate()` com JS injection.
 - URLs reais extraídas: `https://www.mercadolivre.com.br/{slug-do-produto}/p/MLB{id}` (ex: `https://www.mercadolivre.com.br/mouse-gamer-redragon-cobra-rgb-preto-preto/p/MLB8752191`).
 - Links ML são **sempre** convertidos para `meli.la` via painel de afiliados — URLs longas com `matt_word`/`matt_tool` não são mais usadas.
 - `scan_deals.py` agora usa `fetch_ml_browser.py` para ML em vez do servidor Playwright.
@@ -194,7 +188,7 @@ python3 -m pytest tests/ -v
 - ML agora exige CAPTCHA (reCAPTCHA de imagem) + verificação 2FA (código por email) no login.
 - Login automático não é mais viável — requer intervenção manual.
 - `generate_melila_links.py --login` abre browser headed para login manual.
-- Após login, a sessão do agent-browser é reutilizada para gerar links.
+- Após login, a sessão do Playwright é reutilizada para gerar links.
 - Seletores de input atualizados para serem mais flexíveis (busca por "insira", "url", "link").
 
 ### 18. Envio automático para WhatsApp via Playwright (15/04/2026)
@@ -207,28 +201,26 @@ python3 -m pytest tests/ -v
 - **Arquivo:** `scripts/send_to_whatsapp.py` — pode ser usado standalone ou integrado.
 - **Testes:** 15 testes unitários adicionados. Total: 102 testes passando.
 
-## Status dos marketplaces (15/04/2026)
+### 19. agent-browser removido — Playwright direto para ML (16/04/2026)
+- **Problema**: Dependência adicional (agent-browser CLI em Rust) desnecessária — Playwright já faz tudo que era preciso.
+- **Solução**: `fetch_ml_browser.py` reescrito para usar Playwright sync API com `page.evaluate()` para JS injection no DOM.
+- Mesmo JS de extração mantido, agora executado via Playwright em vez de subprocess.
+- Dependência `agent-browser` removida. Proxy não é mais necessário para scraping do ML.
+- `generate_melila_links.py` continua usando Playwright para geração de links meli.la (já usava).
+
+## Status dos marketplaces (16/04/2026)
 | Marketplace | Status | Links afiliados | Observação |
 |---|---|---|---|
 | Amazon BR | Funcionando | Automático (`?tag=brunoentende-20`) | Extrai preço atual + preço anterior riscado |
-| Mercado Livre | Funcionando (via proxy) | meli.la gerado automaticamente via painel | IP do servidor bloqueado pelo ML; usar proxy residencial |
-| Shopee BR | Descartada (por ora) | N/A | Proteção anti-bot inviável sem login — agent browser pode viabilizar |
-
-## Dependências adicionais
-- **agent-browser** — `npm install -g agent-browser` (CLI Rust para automação de browser)
-- **Chrome for Testing** — `agent-browser install` (baixa Chrome automaticamente)
-- **Proxy residencial** — IP do servidor é bloqueado pelo ML CloudFront. Usar variável de ambiente `ML_PROXY` ou flag `--proxy`
-- Note: agent-browser não depende do Playwright. É um binário Rust independente que gerencia seu próprio Chrome.
+| Mercado Livre | Funcionando | meli.la gerado automaticamente via painel | Playwright direto com JS injection no DOM |
+| Shopee BR | Descartada (por ora) | N/A | Proteção anti-bot inviável sem login |
 
 ## Comandos úteis
 ```bash
-# Instalar agent-browser (primeira vez)
-npm install -g agent-browser && agent-browser install
-
 # Login manual no ML (primeira vez ou sessão expirou)
-ML_PROXY="http://200.174.198.32:8888" python3 generate_melila_links.py --login
+python3 generate_melila_links.py --login
 
-# Buscar ofertas (Amazon + ML) — não precisa mais do scrape server!
+# Buscar ofertas (Amazon + ML)
 python3 scan_deals.py "mouse gamer" --min-discount 10
 
 # Buscar todas as categorias gamer
@@ -237,8 +229,8 @@ python3 scan_deals.py --all --min-discount 10
 # Buscar com mais resultados
 python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
 
-# Gerar meli.la manualmente (com proxy)
-ML_PROXY="http://200.174.198.32:8888" python3 generate_melila_links.py --urls "https://www.mercadolivre.com.br/mouse-gamer/p/MLB123"
+# Gerar meli.la manualmente
+python3 generate_melila_links.py --urls "https://www.mercadolivre.com.br/mouse-gamer/p/MLB123"
 
 # Enviar ofertas para WhatsApp (primeira vez — headed para QR)
 python3 scan_deals.py "mouse gamer" --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Ofertas" --headed
