@@ -6,9 +6,9 @@ Uses Playwright to automate WhatsApp Web. Sends product images with
 formatted deal messages as captions.
 
 Usage:
-    python3 send_to_whatsapp.py --group "Grupo de Ofertas" --deals deals.json
-    python3 send_to_whatsapp.py --group "Grupo de Ofertas" --deals deals.json --headed
-    python3 send_to_whatsapp.py --group "Grupo de Ofertas" --message "Test message" --image-url "https://..."
+    python3 send_to_whatsapp.py --deals deals.json
+    python3 send_to_whatsapp.py --deals deals.json --headed
+    python3 send_to_whatsapp.py --message "Test message" --image-url "https://..." --group "Grupo de Teste"
 
 Session is persisted in data/whatsapp_session/ so you only need to scan
 the QR code once. Use --headed on first run to scan the QR code.
@@ -24,6 +24,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
+from config import resolve_whatsapp_group
 
 ROOT = Path(__file__).resolve().parents[1]
 SESSION_DIR = ROOT / "data" / "whatsapp_session"
@@ -350,7 +351,9 @@ def main() -> None:
         description="Send deal messages to WhatsApp groups via WhatsApp Web."
     )
     parser.add_argument(
-        "--group", required=True, help="Name of the WhatsApp group to send to"
+        "--group",
+        default="",
+        help="Name of the WhatsApp group to send to (defaults to WHATSAPP_GROUP from .env)",
     )
     parser.add_argument(
         "--deals", help="Path to deals JSON file (from scan_deals.py output)"
@@ -374,6 +377,9 @@ def main() -> None:
         help="Max retries per failed message (default: 2)"
     )
     args = parser.parse_args()
+    group_name = resolve_whatsapp_group(args.group)
+    if not group_name:
+        parser.error("Provide --group or set WHATSAPP_GROUP in .env")
 
     deals = []
 
@@ -400,11 +406,11 @@ def main() -> None:
     else:
         parser.error("Provide either --deals or both --message and --image-url")
 
-    print(f"\nSending {len(deals)} deal(s) to group: {args.group}\n")
+    print(f"\nSending {len(deals)} deal(s) to group: {group_name}\n")
 
     results = send_deals_to_whatsapp(
         deals=deals,
-        group_name=args.group,
+        group_name=group_name,
         headed=args.headed,
         delay_between=args.delay,
         max_retries=args.max_retries,

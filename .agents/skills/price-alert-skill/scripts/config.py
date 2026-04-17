@@ -22,10 +22,19 @@ if _env_file.exists():
                 os.environ.setdefault(key, value)
 
 AMAZON_AFFILIATE_TAG = os.environ.get("AMAZON_AFFILIATE_TAG", "brunoentende-20")
+WHATSAPP_GROUP = os.environ.get("WHATSAPP_GROUP", "")
 
 # ML Affiliate login credentials (loaded from .env)
 ML_AFFILIATE_EMAIL = os.environ.get("ML_AFFILIATE_EMAIL", "")
 ML_AFFILIATE_PASSWORD = os.environ.get("ML_AFFILIATE_PASSWORD", "")
 
-# Proxy for ML access (server IPs are blocked by ML CloudFront)
+# Optional proxy for Mercado Livre affiliate access
 ML_PROXY = os.environ.get("ML_PROXY", "")
+
+
+def resolve_whatsapp_group(cli_group: str = "") -> str:
+    """Resolve the WhatsApp group name from CLI input or .env."""
+    explicit_group = (cli_group or "").strip()
+    if explicit_group:
+        return explicit_group
+    return WHATSAPP_GROUP.strip()

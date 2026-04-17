@@ -1,246 +1,147 @@
 # Context — price-alert-skill
 
-## Sobre este documento
-Este arquivo documenta o contexto completo do projeto e as decisões tomadas. Útil para continuidade em sessões futuras com outros agentes.
+## Resumo
 
----
+`price-alert-skill` é um pipeline de scraping sob demanda para marketplaces brasileiros. O fluxo atual busca ofertas na Amazon BR e no Mercado Livre, filtra produtos com desconto mínimo, gera links de afiliado, formata mensagens para WhatsApp e pode enviar automaticamente essas mensagens pelo WhatsApp Web.
 
-## O que é a skill
-A `price-alert-skill` é um buscador de ofertas para marketplaces brasileiros (Amazon BR, Mercado Livre). Ela:
-- Busca produtos por categoria em marketplaces
-- Extrai preços atuais e descontos exibidos pelo próprio marketplace
-- Gera mensagens formatadas para WhatsApp com ofertas encontradas
-- **NÃO usa SQLite** — abordagem é scraping sob demanda
+O projeto não depende de banco de dados relacional nem de servidor de scraping dedicado para o fluxo principal.
 
-## Estrutura do repositório
-```
+## Fluxo que está valendo hoje
+
+1. `scripts/scan_deals.py` é o ponto de entrada principal.
+2. Amazon BR é coletada por `scripts/fetch_amazon_br.py` usando Playwright sync API.
+3. Mercado Livre é coletado por `scripts/fetch_ml_browser.py` usando Playwright sync API e leitura do DOM renderizado.
+4. Ofertas novas são deduplicadas com base em `data/sent_deals.json`.
+5. Ofertas do Mercado Livre tentam virar `meli.la` via `scripts/generate_melila_links.py`.
+6. As mensagens são formatadas por `scripts/utils.py`.
+7. Quando `--send-whatsapp` é usado, o envio acontece por `scripts/send_to_whatsapp.py`.
+
+## Estrutura relevante
+
+```text
 .agents/skills/price-alert-skill/
-├── SKILL.md                         # Documentação principal
-├── CONTEXT.md                       # Este arquivo (contexto do projeto)
-├── PLANO.md                         # Plano de execução e etapas
-├── requirements.txt                 # Dependências Python
-├── references/                      # Documentação de referência
-│   ├── extraction-rules-amazon.md   # Regras de parsing Amazon
-│   ├── extraction-rules-mercadolivre.md  # Regras de parsing ML
-│   └── output-schema.md             # Schema de saída dos fetchers
+├── SKILL.md
+├── CONTEXT.md
+├── PLANO.md
+├── .env.example
+├── requirements.txt
+├── data/
+│   ├── melila_cache.json
+│   ├── ml_session.json
+│   ├── sent_deals.json
+│   ├── messages/
+│   └── whatsapp_session/
+├── references/
 └── scripts/
-    ├── config.py                   # Configuração (tags de afiliado, credenciais login ML)
-    ├── scrape_server.py             # Servidor Playwright (LEGADO — não mais necessário)
-    ├── scan_deals.py                # ★ SCRIPT PRINCIPAL — busca ofertas e gera mensagens
-    ├── fetch_amazon_br.py           # Fetcher Amazon Brasil (Playwright direto + link afiliado)
-    ├── fetch_ml_browser.py          # ★ Fetcher ML via Playwright (JS injection no DOM)
-    ├── fetch_mercadolivre_br.py     # Fetcher ML legado (HTML estático, fallback)
-    ├── generate_melila_links.py     # ★ Gerador de links meli.la via painel de afiliados
-    ├── utils.py                     # Funções compartilhadas (emojis, formatação, templates, dedup)
-    └── tests/                       # Testes unitários (96 testes)
-        ├── test_utils.py            # Testes de utils
-        ├── test_amazon.py           # Testes do parser Amazon (inclui build_affiliate_url)
-        ├── test_mercadolivre.py     # Testes do parser ML legado
-        └── test_ml_browser.py       # ★ Testes do fetcher ML (Playwright)
+    ├── config.py
+    ├── scan_deals.py
+    ├── fetch_amazon_br.py
+    ├── fetch_ml_browser.py
+    ├── fetch_mercadolivre_br.py
+    ├── generate_melila_links.py
+    ├── send_to_whatsapp.py
+    ├── scrape_server.py
+    ├── utils.py
+    └── tests/
 ```
 
-## Dependências
-- **Python 3.12+** (stdlib apenas)
-- **playwright** — browser headless com stealth (Amazon + ML + WhatsApp)
-- **Chromium** — `playwright install chromium`
-- **Dependências de sistema**: `sudo apt install -y libnspr4 libnss3`
+## Componentes ativos
 
-## Como usar (fluxo atual)
+- `scripts/scan_deals.py`
+  Coordena a busca, deduplicação, geração de mensagens e envio opcional para WhatsApp.
 
-### 1. Instalar dependências
+- `scripts/fetch_amazon_br.py`
+  Busca resultados na Amazon BR e converte URLs para o formato afiliado com `AMAZON_AFFILIATE_TAG`.
+
+- `scripts/fetch_ml_browser.py`
+  Busca resultados no Mercado Livre usando Playwright direto. Este é o caminho principal para ML hoje.
+
+- `scripts/generate_melila_links.py`
+  Usa sessão persistida do painel de afiliados do Mercado Livre para gerar links `meli.la`.
+
+- `scripts/send_to_whatsapp.py`
+  Usa uma sessão persistida do WhatsApp Web para enviar imagem + legenda para um grupo.
+
+- `scripts/config.py`
+  Carrega o `.env` e centraliza configurações como `AMAZON_AFFILIATE_TAG` e `WHATSAPP_GROUP`.
+
+## Componentes legados
+
+- `scripts/scrape_server.py`
+  Mantido no repositório, mas não faz parte do fluxo principal. Não é necessário iniciar servidor para usar a skill hoje.
+
+- `scripts/fetch_mercadolivre_br.py`
+  Parser legado do Mercado Livre baseado em HTML estático. O caminho principal atual é `fetch_ml_browser.py`.
+
+## Variáveis de ambiente
+
+- `AMAZON_AFFILIATE_TAG`
+  Obrigatória para gerar links afiliados da Amazon com a tag correta.
+
+- `WHATSAPP_GROUP`
+  Grupo padrão usado por `scan_deals.py` e `send_to_whatsapp.py`. O parâmetro de linha de comando continua disponível como sobrescrita manual.
+
+- `ML_PROXY`
+  Proxy opcional para cenários em que o painel de afiliados do Mercado Livre bloquear o IP.
+
+- `ML_AFFILIATE_EMAIL` e `ML_AFFILIATE_PASSWORD`
+  Mantidas no `.env.example` para referência, embora o login atual seja manual pelo navegador.
+
+## Estado persistido em disco
+
+- `data/sent_deals.json`
+  Evita reenviar ofertas já processadas recentemente. A limpeza automática remove entradas antigas.
+
+- `data/melila_cache.json`
+  Cache de URLs do Mercado Livre já convertidas para `meli.la`.
+
+- `data/ml_session.json`
+  Sessão persistida do painel de afiliados do Mercado Livre.
+
+- `data/whatsapp_session/`
+  Perfil persistido do WhatsApp Web.
+
+- `data/messages/deals_*.json`
+  Saída gerada por execuções do `scan_deals.py`.
+
+## Comandos de referência
+
 ```bash
-pip install playwright
+# Instalação
+pip install -r requirements.txt
 playwright install chromium
-sudo apt install -y libnspr4 libnss3  # se necessário
-```
 
-### 2. Login no ML (primeira vez ou quando sessão expirar)
-```bash
-cd .agents/skills/price-alert-skill/scripts
-ML_PROXY="http://200.174.198.32:8888" python3 generate_melila_links.py --login
-# Resolve CAPTCHA/2FA manualmente no browser headed, depois pressiona Enter
-```
+# Login manual no Mercado Livre afiliados
+python3 scripts/generate_melila_links.py --login
 
-### 3. Buscar ofertas (script principal)
-```bash
-# Buscar ofertas de uma categoria (Amazon + ML)
-python3 scan_deals.py "mouse gamer" --min-discount 10
+# Buscar ofertas
+python3 scripts/scan_deals.py "mouse gamer" --min-discount 10
+python3 scripts/scan_deals.py --all --min-discount 10
 
-# Buscar TODAS as categorias gamer
-python3 scan_deals.py --all --min-discount 10
+# Enviar para o grupo padrão do .env
+python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp
 
-# Buscar apenas no Mercado Livre
-python3 scan_deals.py "mouse gamer" --marketplaces mercadolivre_br --min-discount 5
-```
+# Sobrescrever o grupo do .env
+python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Teste"
 
-### 4. Resultado
-As mensagens são salvas em `data/messages/deals_YYYYMMDD_HHMMSS.json` e exibidas no terminal, prontas para copiar para WhatsApp.
-Ofertas já enviadas em execuções anteriores são automaticamente filtradas via `data/sent_deals.json`.
+# Login inicial do WhatsApp
+python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp --headed
 
-### 5. Rodar testes
-```bash
-cd .agents/skills/price-alert-skill/scripts
+# Uso direto do sender
+python3 scripts/send_to_whatsapp.py --deals data/messages/deals_YYYYMMDD_HHMMSS.json
+
+# Testes
 python3 -m pytest tests/ -v
 ```
 
-## Decisões tomadas
+## Decisões importantes do projeto
 
-### 1. Substituição do Steel Browser
-- **Problema**: Skill original dependia do Steel Browser (serviço externo pago).
-- **Solução**: `scrape_server.py` com Playwright + Chromium local, replicando mesma API.
-- **Stealth**: user-agent aleatório, viewport randomizado, injeção de JS anti-detecção.
+- O pipeline usa scraping sob demanda e não histórico em banco.
+- O desconto confiado é o que o marketplace exibe.
+- O envio de WhatsApp depende de sessão persistida e de seletor compatível com a UI atual do WhatsApp Web.
+- O grupo padrão de envio agora pode vir do `.env`, evitando hardcode no comando do fluxo end-to-end.
 
-### 2. Shopee — descartada
-- Proteção anti-bot agressiva (interstitial, CAPTCHA).
-- Login manual inviável (cookies expiram em 12h).
-- **Decisão**: Focar apenas em Amazon BR e Mercado Livre.
+## Observações de manutenção
 
-### 3. Abordagem sem SQLite (decisão final)
-- Repassar apenas o desconto que o marketplace exibe.
-- Zero banco de dados, zero agendamento, zero manutenção.
-
-### 4. Zoom — removido
-- Scripts removidos: `fetch_zoom_history.py`, `link_zoom_product.py`, `enrich_with_zoom.py`.
-
-### 5. Parser da Amazon atualizado
-- Extrai `list_price` (preço anterior riscado) detectando segundo preço `a-offscreen` maior que o primeiro.
-
-### 6. Parser do Mercado Livre reescrito
-- HTML do ML mudou completamente (de `li.ui-search-layout__item` para `div.ui-search-result__wrapper`).
-- Extrai preços dos `aria-label="Agora:"` e `aria-label="Antes:"`.
-- URLs reais construídas a partir dos IDs MLB.
-
-### 7. Código duplicado consolidado
-- Funções compartilhadas em `scripts/utils.py` (emojis, formatação de preço, template de mensagem).
-
-### 8. Formato das mensagens WhatsApp (atualizado 11/04/2026)
-- `% OFF` aparece primeiro (mais impactante).
-- `Antes:` sem strikethrough, linha separada.
-- `Hoje:` preço atual na última linha de preço.
-- Link do produto no final (WhatsApp gera preview com imagem automaticamente).
-- Links ML usam formato `meli.la` (gerados via painel de afiliados) quando possível.
-
-```
-{emoji} OFERTA DO DIA 👇
-
-{emoji} {NOME_PRODUTO}
-
-🔥 {PERCENTUAL}% OFF
-💰 Antes: R$ {PRECO_ANTERIOR}
-🎯 Hoje: R$ {PRECO_ATUAL}
-
-🛍️ Comprar aqui:
-{LINK}
-
-💸 Valores podem variar. Se entrar em estoque baixo, some rápido.
-```
-
-### 9. Deduplicação cross-session
-- `data/sent_deals.json` armazena URLs de ofertas já processadas.
-- Limpeza automática de ofertas com mais de 7 dias.
-- Integrado no `scan_deals.py` — filtra antes de formatar mensagens.
-
-### 10. Testes automatizados
-- 102 testes unitários cobrindo utils, parser Amazon (incluindo geração de links afiliados), parser ML (incluindo geração de links afiliados), mensagens WhatsApp e envio automático para WhatsApp.
-- Rodar com: `python3 -m pytest tests/ -v`
-
-### 11. Links afiliados — Amazon BR (implementado)
-- URLs da Amazon são automaticamente convertidas para links de afiliado usando `?tag=brunoentende-20`.
-- Formato gerado: `https://www.amazon.com.br/dp/{ASIN}?tag=brunoentende-20`
-- O ASIN é extraído do `data-asin` do card do produto. URLs longas com `ref=`, `linkCode`, `linkId` são sanitizadas para o formato limpo `/dp/{ASIN}?tag=XXX`.
-- Tag configurável via variável de ambiente `AMAZON_AFFILIATE_TAG` (default: `brunoentende-20`) ou editando `scripts/config.py`.
-- Implementação: função `build_affiliate_url()` em `fetch_amazon_br.py` + `config.py`.
-
-### 12. Links afiliados — Mercado Livre (RESOLVIDO com Playwright + meli.la)
-- **Problema original**: URLs construídas a partir do ID MLB (`produto.mercadolivre.com.br/MLB-{number}-_JM`) não eram confiáveis — alguns IDs geravam página 404.
-- **Solução**: `fetch_ml_browser.py` usa **Playwright** para renderizar a página com JavaScript e extrair os **links reais** do DOM via `page.evaluate()` com JS injection.
-- URLs reais extraídas: `https://www.mercadolivre.com.br/{slug-do-produto}/p/MLB{id}` (ex: `https://www.mercadolivre.com.br/mouse-gamer-redragon-cobra-rgb-preto-preto/p/MLB8752191`).
-- Links ML são **sempre** convertidos para `meli.la` via painel de afiliados — URLs longas com `matt_word`/`matt_tool` não são mais usadas.
-- `scan_deals.py` agora usa `fetch_ml_browser.py` para ML em vez do servidor Playwright.
-- O fetcher antigo `fetch_mercadolivre_br.py` (baseado em HTML estático) é mantido como fallback.
-
-### 13. Mensagens WhatsApp — imagem removida do texto
-- `format_deal_message()` não inclui mais `📷 Imagem do produto: {URL}` no texto.
-- O campo `image_url` continua no dict do deal para uso futuro pelo `send_to_whatsapp.py` (Passo 2: enviar imagem como mídia com mensagem como legenda).
-
-### 14. Links meli.la — geração via painel de afiliados (FUNCIONANDO via proxy)
-- **Decisão**: Todos os links do Mercado Livre são convertidos para `meli.la` via painel de afiliados. URLs longas com `matt_word`/`matt_tool` foram removidas.
-- **Bloqueio IP**: servidor bloqueado pelo ML CloudFront (403). Solução: usar proxy residencial brasileiro.
-- **Gerador de Links**: em `mercadolivre.com.br/afiliados/linkbuilder`, aceita URLs no formato `https://www.mercadolivre.com.br/{slug}/p/MLB{id}`.
-- **Geração em lote**: suportada! Campo "Insira 1 ou mais URLs separados por 1 linha" aceita múltiplas URLs separadas por newline.
-- **Testado e funcionando**: geração individual e em lote de links meli.la via proxy.
-
-### 15. Formato da mensagem atualizado (11/04/2026)
-- Alterado de `~~📉 Era: R$ X~~` → `💰 Antes: R$ X` (sem strikethrough)
-- Alterado de `🔥 Desconto: X% OFF` → `🔥 X% OFF` (simplificado)
-- Ordem alterada: % OFF primeiro, depois Antes/Hoje
-- Alinhado ao modelo de mensagem do cliente
-
-### 16. Scrape server eliminado — Playwright direto (14/04/2026)
-- **Problema**: `scrape_server.py` travava (hang) ao processar requisições da Amazon via FastAPI + Playwright async.
-- **Causa provável**: conflito entre event loops do uvicorn e do Playwright async dentro do mesmo processo.
-- **Solução**: `fetch_amazon_br.py` agora usa Playwright sync API diretamente, eliminando a necessidade do servidor.
-- `scrape_server.py` mantido como legado mas não é mais necessário para o funcionamento.
-- Dependências `fastapi` e `uvicorn` removidas dos requisitos.
-- `scan_deals.py` atualizado: `run()` da Amazon não recebe mais `api_base` e `scrape_endpoint`.
-
-### 17. Login ML via headed browser (14/04/2026)
-- ML agora exige CAPTCHA (reCAPTCHA de imagem) + verificação 2FA (código por email) no login.
-- Login automático não é mais viável — requer intervenção manual.
-- `generate_melila_links.py --login` abre browser headed para login manual.
-- Após login, a sessão do Playwright é reutilizada para gerar links.
-- Seletores de input atualizados para serem mais flexíveis (busca por "insira", "url", "link").
-
-### 18. Envio automático para WhatsApp via Playwright (15/04/2026)
-- **Objetivo:** Enviar imagens + mensagens automaticamente via WhatsApp Web.
-- **Decisão:** Usar Playwright (já instalado) em vez de Selenium ou Baileys.
-- **Imagens:** Download feito no momento do envio usando URL `image_url` extraída durante scraping.
-- **Envio:** Imagem como mídia com a mensagem formatada como legenda.
-- **Sessão:** Persistente em `data/whatsapp_session/` — QR code apenas na primeira vez.
-- **Integração:** Flags `--send-whatsapp` e `--whatsapp-group` no `scan_deals.py`.
-- **Arquivo:** `scripts/send_to_whatsapp.py` — pode ser usado standalone ou integrado.
-- **Testes:** 15 testes unitários adicionados. Total: 102 testes passando.
-
-### 19. agent-browser removido — Playwright direto para ML (16/04/2026)
-- **Problema**: Dependência adicional (agent-browser CLI em Rust) desnecessária — Playwright já faz tudo que era preciso.
-- **Solução**: `fetch_ml_browser.py` reescrito para usar Playwright sync API com `page.evaluate()` para JS injection no DOM.
-- Mesmo JS de extração mantido, agora executado via Playwright em vez de subprocess.
-- Dependência `agent-browser` removida. Proxy não é mais necessário para scraping do ML.
-- `generate_melila_links.py` continua usando Playwright para geração de links meli.la (já usava).
-
-## Status dos marketplaces (16/04/2026)
-| Marketplace | Status | Links afiliados | Observação |
-|---|---|---|---|
-| Amazon BR | Funcionando | Automático (`?tag=brunoentende-20`) | Extrai preço atual + preço anterior riscado |
-| Mercado Livre | Funcionando | meli.la gerado automaticamente via painel | Playwright direto com JS injection no DOM |
-| Shopee BR | Descartada (por ora) | N/A | Proteção anti-bot inviável sem login |
-
-## Comandos úteis
-```bash
-# Login manual no ML (primeira vez ou sessão expirou)
-python3 generate_melila_links.py --login
-
-# Buscar ofertas (Amazon + ML)
-python3 scan_deals.py "mouse gamer" --min-discount 10
-
-# Buscar todas as categorias gamer
-python3 scan_deals.py --all --min-discount 10
-
-# Buscar com mais resultados
-python3 scan_deals.py "ssd 2tb" --min-discount 5 --max-results 20
-
-# Gerar meli.la manualmente
-python3 generate_melila_links.py --urls "https://www.mercadolivre.com.br/mouse-gamer/p/MLB123"
-
-# Enviar ofertas para WhatsApp (primeira vez — headed para QR)
-python3 scan_deals.py "mouse gamer" --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Ofertas" --headed
-
-# Enviar ofertas após sessão inicial
-python3 scan_deals.py --all --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Ofertas"
-
-# Usar script de envio diretamente
-python3 send_to_whatsapp.py --group "Grupo de Ofertas" --deals data/messages/deals_*.json
-
-# Rodar testes
-python3 -m pytest tests/ -v
-```
+- Mudanças no HTML da Amazon BR, do Mercado Livre ou do WhatsApp Web podem quebrar seletores e exigir ajustes.
+- A documentação foi limpa para refletir apenas o fluxo vivo; se algum arquivo legado voltar a ser usado, isso deve ser documentado explicitamente antes.

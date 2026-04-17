@@ -7,7 +7,6 @@ Browser automation (Playwright) is mocked to avoid requiring a real browser.
 """
 
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,6 +16,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import config
+import send_to_whatsapp
 from send_to_whatsapp import (
     _download_image,
     _is_logged_in,
@@ -137,7 +138,7 @@ class TestSearchAndOpenGroup:
         page.wait_for_selector.return_value = search_box
 
         group_item = MagicMock()
-        group_item.get_attribute.return_value = "Grupo de Ofertas"
+        group_item.text_content.return_value = "Grupo de Ofertas"
         page.query_selector_all.return_value = [group_item]
 
         _search_and_open_group(page, "Grupo de Ofertas")
@@ -164,7 +165,27 @@ class TestSendImageWithCaption:
 
     def test_send_success(self):
         page = MagicMock()
-        page.wait_for_selector.return_value = True
+        caption_el = MagicMock()
+        send_btn = MagicMock()
+
+        def wait_for_selector_side_effect(selector, timeout=None):
+            if selector == 'button[aria-label="Attach"]':
+                return MagicMock()
+            if selector in (
+                'div[contenteditable="true"][data-lexical-editor="true"]',
+                'div[contenteditable="true"][role="textbox"]',
+                'div[contenteditable="true"]',
+            ):
+                return caption_el
+            if selector in (
+                'button[aria-label="Send"]',
+                'button[data-testid="compose-btn-send"]',
+                'span[data-icon="send"]',
+            ):
+                return send_btn
+            raise AssertionError(f"Unexpected selector: {selector}")
+
+        page.wait_for_selector.side_effect = wait_for_selector_side_effect
 
         mock_fc_info = MagicMock()
         mock_file_chooser = MagicMock()
@@ -181,8 +202,10 @@ class TestSendImageWithCaption:
         )
 
         assert result is True
-        page.click.assert_any_call('div[title="Attach"]')
-        page.keyboard.type.assert_called()
+        page.click.assert_any_call('button[aria-label="Attach"]')
+        page.click.assert_any_call('button[aria-label="Photos & videos"]')
+        caption_el.fill.assert_called_with("Test caption")
+        send_btn.click.assert_called()
 
     def test_send_failure_returns_false(self):
         page = MagicMock()
@@ -201,14 +224,11 @@ class TestSendDealsIntegration:
         from send_to_whatsapp import send_deals_to_whatsapp
 
         mock_page = MagicMock()
-        mock_page.query_selector.return_value = None
         mock_context = MagicMock()
-        mock_browser = MagicMock()
-        mock_browser.new_context.return_value = mock_context
         mock_context.new_page.return_value = mock_page
 
         mock_p = MagicMock()
-        mock_p.chromium.launch.return_value = mock_browser
+        mock_p.chromium.launch_persistent_context.return_value = mock_context
         mock_playwright.return_value.__enter__ = MagicMock(return_value=mock_p)
         mock_playwright.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -223,7 +243,8 @@ class TestSendDealsIntegration:
 
         with patch("send_to_whatsapp._download_image") as mock_dl, \
              patch("send_to_whatsapp._send_image_with_caption", return_value=True), \
-             patch("send_to_whatsapp._search_and_open_group"):
+             patch("send_to_whatsapp._search_and_open_group"), \
+             patch("send_to_whatsapp._ensure_logged_in"):
             mock_dl.return_value = "/tmp/test.jpg"
 
             results = send_deals_to_whatsapp(
@@ -240,14 +261,11 @@ class TestSendDealsIntegration:
         from send_to_whatsapp import send_deals_to_whatsapp
 
         mock_page = MagicMock()
-        mock_page.query_selector.return_value = None
         mock_context = MagicMock()
-        mock_browser = MagicMock()
-        mock_browser.new_context.return_value = mock_context
         mock_context.new_page.return_value = mock_page
 
         mock_p = MagicMock()
-        mock_p.chromium.launch.return_value = mock_browser
+        mock_p.chromium.launch_persistent_context.return_value = mock_context
         mock_playwright.return_value.__enter__ = MagicMock(return_value=mock_p)
         mock_playwright.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -260,7 +278,8 @@ class TestSendDealsIntegration:
             }
         ]
 
-        with patch("send_to_whatsapp._search_and_open_group"):
+        with patch("send_to_whatsapp._search_and_open_group"), \
+             patch("send_to_whatsapp._ensure_logged_in"):
             results = send_deals_to_whatsapp(
                 deals=deals,
                 group_name="Test Group",
@@ -270,3 +289,49 @@ class TestSendDealsIntegration:
         assert results["sent"] == 0
         assert results["failed"] == 1
         assert results["errors"][0]["reason"] == "no image_url"
+
+
+class TestCliGroupResolution:
+    """Tests for CLI fallback to WHATSAPP_GROUP from .env."""
+
+    @patch("send_to_whatsapp.send_deals_to_whatsapp", return_value={"sent": 1, "failed": 0, "errors": []})
+    def test_main_uses_env_group_when_group_flag_is_missing(self, mock_send, monkeypatch, tmp_path):
+        deals_path = tmp_path / "deals.json"
+        deals_path.write_text(json.dumps({
+            "messages": [{
+                "title": "Mouse Gamer",
+                "url": "https://example.com/1",
+                "image_url": "https://example.com/mouse.jpg",
+                "message": "Test message",
+            }]
+        }))
+
+        monkeypatch.setattr(config, "WHATSAPP_GROUP", "Grupo via Env")
+        monkeypatch.setattr(sys, "argv", ["send_to_whatsapp.py", "--deals", str(deals_path)])
+
+        send_to_whatsapp.main()
+
+        assert mock_send.call_args.kwargs["group_name"] == "Grupo via Env"
+
+    @patch("send_to_whatsapp.send_deals_to_whatsapp", return_value={"sent": 1, "failed": 0, "errors": []})
+    def test_main_prefers_cli_group_over_env(self, mock_send, monkeypatch, tmp_path):
+        deals_path = tmp_path / "deals.json"
+        deals_path.write_text(json.dumps({
+            "messages": [{
+                "title": "Mouse Gamer",
+                "url": "https://example.com/1",
+                "image_url": "https://example.com/mouse.jpg",
+                "message": "Test message",
+            }]
+        }))
+
+        monkeypatch.setattr(config, "WHATSAPP_GROUP", "Grupo via Env")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["send_to_whatsapp.py", "--deals", str(deals_path), "--group", "Grupo via CLI"],
+        )
+
+        send_to_whatsapp.main()
+
+        assert mock_send.call_args.kwargs["group_name"] == "Grupo via CLI"

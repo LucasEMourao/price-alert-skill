@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from config import resolve_whatsapp_group
 from fetch_amazon_br import run as run_amazon
 from fetch_ml_browser import run as run_mercadolivre_browser
 from generate_melila_links import generate_links
@@ -135,7 +136,11 @@ def main() -> None:
     parser.add_argument("--marketplaces", default="amazon_br,mercadolivre_br", help="Comma-separated marketplaces")
     parser.add_argument("--output", help="Path to save messages JSON")
     parser.add_argument("--send-whatsapp", action="store_true", help="Send deals to WhatsApp after scanning")
-    parser.add_argument("--whatsapp-group", default="", help="WhatsApp group name (default: first group found)")
+    parser.add_argument(
+        "--whatsapp-group",
+        default="",
+        help="WhatsApp group name (defaults to WHATSAPP_GROUP from .env)",
+    )
     parser.add_argument("--headed", action="store_true", help="Open browser window for WhatsApp (needed for first-time QR scan)")
     args = parser.parse_args()
 
@@ -218,9 +223,9 @@ def main() -> None:
     if args.send_whatsapp and messages:
         from send_to_whatsapp import send_deals_to_whatsapp
 
-        group = args.whatsapp_group
+        group = resolve_whatsapp_group(args.whatsapp_group)
         if not group:
-            parser.error("--whatsapp-group is required when using --send-whatsapp")
+            parser.error("Set WHATSAPP_GROUP in .env or pass --whatsapp-group when using --send-whatsapp")
 
         print(f"\nSending {len(messages)} deal(s) to WhatsApp group: {group}...")
 

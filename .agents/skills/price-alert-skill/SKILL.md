@@ -1,79 +1,101 @@
 ---
 name: price-alert-monitor
-description: Busque ofertas em marketplaces brasileiros (Amazon BR, Mercado Livre) e gere mensagens formatadas para WhatsApp. Use esta skill quando o usuario quiser buscar descontos por categoria ou varrer todas as categorias de uma vez.
+description: Busque ofertas na Amazon BR e no Mercado Livre, gere links de afiliado e monte mensagens prontas para WhatsApp.
 ---
 
 # Price Alert Monitor
 
 Skill para busca sob demanda de ofertas em marketplaces brasileiros.
 
-- Busca resultados na Amazon BR e Mercado Livre
-- Extrai preco atual e preco anterior riscado (quando exibido pelo marketplace)
-- Filtra produtos com desconto acima de um limite minimo
-- **Gera links de afiliado automaticamente para Amazon BR** (`?tag=brunoentende-20`) **e Mercado Livre** (links `meli.la` via painel de afiliados)
-- Gera mensagens formatadas para WhatsApp prontas para copiar/colar
+## O que a skill faz
 
-## Comportamento Padrao
+- Busca ofertas na Amazon BR e no Mercado Livre
+- Extrai preço atual e preço anterior exibido pelo marketplace
+- Filtra ofertas por desconto mínimo
+- Gera links de afiliado para Amazon BR e links `meli.la` para Mercado Livre
+- Formata mensagens prontas para WhatsApp
+- Pode enviar automaticamente as ofertas pelo WhatsApp Web
 
-- Sempre tente executar o fluxo, nao responda apenas com comandos para o usuario rodar.
-- Quando o usuario pedir para buscar ofertas, rode `scan_deals.py` diretamente.
-- Responda em PT-BR por padrao.
+## Fluxo atual
 
-## Quando Usar
+1. Instale as dependências Python e o Chromium do Playwright.
+2. Configure o `.env`.
+3. Na primeira vez, faça o login manual do Mercado Livre com `python3 scripts/generate_melila_links.py --login`.
+4. Se for usar envio automático, faça o login inicial do WhatsApp com `python3 scripts/scan_deals.py --all --send-whatsapp --headed`.
+5. Rode `scripts/scan_deals.py` com uma query específica ou com `--all`.
+6. As mensagens são exibidas no terminal e salvas em `data/messages/deals_*.json`.
+7. Quando `--send-whatsapp` for usado, o grupo padrão vem de `WHATSAPP_GROUP` no `.env`; `--whatsapp-group` continua disponível como sobrescrita manual.
 
-- O usuario quer buscar ofertas em uma categoria especifica.
-- O usuario quer varrer todas as categorias de uma vez.
-- O usuario quer mensagens prontas para WhatsApp com ofertas encontradas.
+## Scripts principais
 
-## Fluxo
+- `scripts/scan_deals.py` — fluxo principal de busca, filtro, deduplicação, geração de mensagens e envio opcional para WhatsApp
+- `scripts/fetch_amazon_br.py` — scraping da Amazon BR com Playwright e geração de link afiliado
+- `scripts/fetch_ml_browser.py` — scraping do Mercado Livre com Playwright e extração via DOM renderizado
+- `scripts/generate_melila_links.py` — geração de links `meli.la` via painel de afiliados do Mercado Livre
+- `scripts/send_to_whatsapp.py` — envio automático de imagem + legenda no WhatsApp Web
+- `scripts/utils.py` — utilitários compartilhados de desconto, deduplicação e formatação
+- `scripts/config.py` — leitura do `.env` e resolução de configurações compartilhadas
+- `scripts/scrape_server.py` — legado, mantido apenas para referência; não faz parte do fluxo atual
+- `scripts/fetch_mercadolivre_br.py` — parser legado do Mercado Livre; não é o caminho principal
 
-1. (Primeira vez) Login no ML: `python3 scripts/generate_melila_links.py --login`
-2. (Primeira vez WhatsApp) Login via QR code: `python3 scripts/scan_deals.py --send-whatsapp --whatsapp-group "Grupo" --headed`
-3. Rode `scripts/scan_deals.py` com a query desejada ou `--all` para todas as categorias.
-4. As mensagens sao exibidas no terminal e salvas em `data/messages/deals_*.json`.
-5. (Opcional) Envie automaticamente para WhatsApp com `--send-whatsapp`.
+## Variáveis de ambiente
 
-## Scripts Principais
+- `AMAZON_AFFILIATE_TAG` — tag usada nos links afiliados da Amazon BR
+- `WHATSAPP_GROUP` — grupo padrão usado por `scan_deals.py` e `send_to_whatsapp.py`
+- `ML_PROXY` — proxy opcional para cenários em que o painel de afiliados do Mercado Livre bloquear o IP
+- `ML_AFFILIATE_EMAIL` e `ML_AFFILIATE_PASSWORD` — mantidas no `.env.example` para referência, embora o login atual seja manual no navegador
 
-- `scripts/config.py` — Configuracao (tags de afiliado, credenciais de login ML)
-- `scripts/scrape_server.py` — LEGADO — Servidor Playwright (nao mais necessario)
-- `scripts/scan_deals.py` — Script principal: busca ofertas e gera mensagens WhatsApp
-- `scripts/fetch_amazon_br.py` — Fetcher Amazon BR (Playwright direto + link afiliado)
-- `scripts/fetch_ml_browser.py` — Fetcher Mercado Livre via Playwright (JS injection no DOM)
-- `scripts/fetch_mercadolivre_br.py` — Fetcher ML legado (HTML estático, mantido como fallback)
-- `scripts/generate_melila_links.py` — Gerador de links meli.la via painel de afiliados do ML
-- `scripts/send_to_whatsapp.py` — Envio automático para WhatsApp via Playwright (★ NOVO)
-- `scripts/utils.py` — Funcoes compartilhadas (emojis, formatacao de preco, template de mensagem)
-
-## Comandos
+## Instalação
 
 ```bash
-# Instalar dependências (primeira vez)
-pip install playwright
+pip install -r requirements.txt
 playwright install chromium
+sudo apt install -y libnspr4 libnss3  # se o Ubuntu/WSL pedir libs extras do Chromium
 ```
 
-## Categorias Monitoradas
+## Comandos úteis
 
-| Categoria | Query |
-|---|---|
-| Mouse | "mouse gamer" |
-| Teclado | "teclado mecanico gamer" |
-| Headset | "headset gamer" |
-| Monitor | "monitor gamer" |
-| SSD | "ssd 2tb" |
-| Memoria RAM | "memoria ram ddr5" |
-| Placa de video | "placa de video rtx" |
-| Notebook | "notebook gamer" |
-| Gabinete | "gabinete gamer" |
-| Fonte | "fonte gamer" |
-| Cooler | "cooler gamer" |
-| Mousepad | "mousepad gamer" |
+```bash
+# Login manual no Mercado Livre afiliados
+python3 scripts/generate_melila_links.py --login
 
-## Formato da Mensagem WhatsApp
+# Buscar uma categoria
+python3 scripts/scan_deals.py "mouse gamer" --min-discount 10
 
-**Com desconto:**
+# Buscar todas as categorias monitoradas
+python3 scripts/scan_deals.py --all --min-discount 10
+
+# Enviar usando o grupo padrão do .env
+python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp
+
+# Sobrescrever o grupo do .env apenas nesta execução
+python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Teste"
+
+# Login inicial do WhatsApp via QR code
+python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp --headed
+
+# Usar o sender diretamente com o grupo do .env
+python3 scripts/send_to_whatsapp.py --deals data/messages/deals_YYYYMMDD_HHMMSS.json
 ```
+
+## Categorias monitoradas por `--all`
+
+- `mouse gamer`
+- `teclado mecanico gamer`
+- `headset gamer`
+- `monitor gamer`
+- `ssd 2tb`
+- `memoria ram ddr5`
+- `placa de video rtx`
+- `notebook gamer`
+- `gabinete gamer`
+- `fonte gamer`
+- `cooler gamer`
+- `mousepad gamer`
+
+## Formato da mensagem
+
+```text
 {emoji} OFERTA DO DIA 👇
 
 {emoji} {NOME_DO_PRODUTO}
@@ -88,40 +110,12 @@ playwright install chromium
 💸 Valores podem variar. Se entrar em estoque baixo, some rápido.
 ```
 
-**Sem desconto exibido:**
-```
-{emoji} OFERTA DO DIA 👇
+Quando não houver preço anterior exibido, a mensagem sai apenas com a linha `🎯 Hoje`.
 
-{emoji} {NOME_DO_PRODUTO}
+## Observações operacionais
 
-🎯 Hoje: R$ {PRECO_ATUAL}
-
-🛍️ Comprar aqui:
-{LINK}
-
-💸 Valores podem variar. Se entrar em estoque baixo, some rápido.
-```
-
-O link do produto no final da mensagem gera automaticamente um preview com imagem no WhatsApp.
-
-**Envio com imagem + legenda:** O script `send_to_whatsapp.py` envia automaticamente a imagem do produto com a mensagem formatada como legenda, incluindo o link de afiliado.
-
-## Dependencias
-
-- **Python 3.12+**
-- **playwright** (Amazon + ML + WhatsApp — uso direto, sem servidor)
-- **Chromium** (Playwright): `playwright install chromium`
-- **requests** (download de imagens para WhatsApp)
-- **Sistema**: `sudo apt install -y libnspr4 libnss3`
-
-## Guardrails
-
-- **Amazon BR** usa Playwright direto (sem servidor). Gera links de afiliado automaticamente com tag `brunoentende-20` (configuravel via env var `AMAZON_AFFILIATE_TAG`). **Funcionando e testado.**
-- **Mercado Livre** usa Playwright direto com JS injection no DOM para extrair produtos. Gera links `meli.la` automaticamente via painel de afiliados. **Requer login manual** (`--login`) para resolver CAPTCHA/2FA. **Funcionando e testado.**
-- **WhatsApp Web** envio automático via Playwright. **Requer login manual** na primeira vez (`--headed`). Sessão persiste em `data/whatsapp_session/chrome_profile/` (perfil completo do Chrome com IndexedDB). **Funcionando e testado.**
-  - Envia imagem do produto + legenda formatada (com preço antigo riscado via `~`)
-  - Delay de 5s entre mensagens para evitar rate limit
-  - Sincronização de 5s antes de fechar o navegador
-- Shopee BR nao e suportada por enquanto (agent browser pode viabilizar no futuro).
-- Confiar nos descontos exibidos pelo proprio marketplace — nao ha validacao externa.
-- Se nao houver descontos relevantes, responder: `Sem descontos encontrados no momento.`
+- A deduplicação entre execuções usa `data/sent_deals.json`.
+- O cache de links `meli.la` usa `data/melila_cache.json`.
+- A sessão do Mercado Livre fica em `data/ml_session.json`.
+- A sessão do WhatsApp Web fica em `data/whatsapp_session/`.
+- O fluxo depende da estrutura atual dos marketplaces e do WhatsApp Web; mudanças de seletor podem exigir manutenção.
