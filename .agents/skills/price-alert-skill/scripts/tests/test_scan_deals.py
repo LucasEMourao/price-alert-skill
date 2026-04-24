@@ -79,10 +79,7 @@ class TestScanDealsWhatsappGroup:
 
         assert mock_send.call_args.kwargs["group_name"] == "Grupo via CLI"
 
-    @patch(
-        "send_to_whatsapp.send_deals_to_whatsapp",
-        return_value={"sent": 1, "failed": 1, "errors": [{"title": "Mouse Gamer", "reason": "send failed"}], "successful_keys": ["deal-1"]},
-    )
+    @patch("send_to_whatsapp.send_deals_to_whatsapp")
     def test_main_marks_only_successful_deals_after_whatsapp_send(self, mock_send, monkeypatch, tmp_path):
         saved_payload = {}
 
@@ -104,6 +101,12 @@ class TestScanDealsWhatsappGroup:
                 {"deals": deals, "sent_data": sent_data, "auto_save": auto_save}
             ),
         )
+        mock_send.side_effect = lambda **kwargs: {
+            "sent": 1,
+            "failed": 1,
+            "errors": [{"title": "Mouse Gamer", "reason": "send failed"}],
+            "successful_keys": [kwargs["deals"][0]["dedup_key"]],
+        }
         monkeypatch.setattr(
             sys,
             "argv",
