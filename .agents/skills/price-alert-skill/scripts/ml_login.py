@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
+from config import configure_utf8_stdio
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SESSION_FILE = DATA_DIR / "ml_session.json"
 SIGNAL_FILE = DATA_DIR / "ml_login_done"
@@ -24,6 +26,7 @@ delete navigator.__proto__.webdriver;
 """
 
 def main():
+    configure_utf8_stdio()
     print("[ml-login] Opening browser for manual login...")
     print("[ml-login] Login with email, CAPTCHA, 2FA in the browser window.")
     print(f"[ml-login] After logging in, run: touch {SIGNAL_FILE}")

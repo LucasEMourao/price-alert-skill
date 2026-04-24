@@ -20,6 +20,7 @@ import config
 import send_to_whatsapp
 from send_to_whatsapp import (
     _download_image,
+    _ensure_logged_in,
     _is_logged_in,
     _send_image_with_caption,
     _search_and_open_group,
@@ -112,21 +113,61 @@ class TestIsLoggedIn:
 
     def test_logged_in_no_qr(self):
         page = MagicMock()
-        page.query_selector.return_value = None
+        page.url = "https://web.whatsapp.com/"
+
+        def locator_side_effect(selector):
+            locator = MagicMock()
+            locator.first.is_visible.return_value = selector in ("#pane-side", "#side")
+            return locator
+
+        page.locator.side_effect = locator_side_effect
 
         assert _is_logged_in(page) is True
 
     def test_not_logged_in_qr_visible(self):
         page = MagicMock()
-        page.query_selector.return_value = MagicMock()
+        page.url = "https://web.whatsapp.com/"
+
+        def locator_side_effect(selector):
+            locator = MagicMock()
+            locator.first.is_visible.return_value = selector == 'canvas[aria-label*="Scan"]'
+            return locator
+
+        page.locator.side_effect = locator_side_effect
 
         assert _is_logged_in(page) is False
 
+
+class TestEnsureLoggedIn:
+    """Tests for _ensure_logged_in session waiting logic."""
+
+    @patch("send_to_whatsapp.time.sleep", return_value=None)
+    @patch("send_to_whatsapp._get_whatsapp_state")
+    def test_non_headed_waits_for_existing_session(self, mock_state, _mock_sleep):
+        page = MagicMock()
+        page.url = "https://web.whatsapp.com/"
+        page.wait_for_load_state.return_value = None
+        mock_state.side_effect = ["loading", "loading", "logged_in"]
+
+        _ensure_logged_in(page, headed=False, timeout_ms=10000)
+
+    @patch("send_to_whatsapp.time.sleep", return_value=None)
+    @patch("send_to_whatsapp._get_whatsapp_state")
+    def test_non_headed_raises_when_session_is_gone(self, mock_state, _mock_sleep):
+        page = MagicMock()
+        page.url = "https://web.whatsapp.com/"
+        page.wait_for_load_state.return_value = None
+        mock_state.side_effect = ["loading", "logged_out"]
+
+        with pytest.raises(RuntimeError, match="Not logged in"):
+            _ensure_logged_in(page, headed=False, timeout_ms=10000)
+
     def test_logged_in_query_raises(self):
         page = MagicMock()
-        page.query_selector.side_effect = Exception("selector error")
+        page.url = "https://web.whatsapp.com/"
+        page.locator.side_effect = Exception("selector error")
 
-        assert _is_logged_in(page) is True
+        assert _is_logged_in(page) is False
 
 
 class TestSearchAndOpenGroup:
@@ -165,12 +206,19 @@ class TestSendImageWithCaption:
 
     def test_send_success(self):
         page = MagicMock()
+        composer_ready = MagicMock()
+        attach_btn = MagicMock()
+        media_btn = MagicMock()
         caption_el = MagicMock()
         send_btn = MagicMock()
 
         def wait_for_selector_side_effect(selector, timeout=None):
-            if selector == 'button[aria-label="Attach"]':
-                return MagicMock()
+            if selector == 'footer div[contenteditable="true"][role="textbox"]':
+                return composer_ready
+            if selector == 'button[aria-label="Anexar"]':
+                return attach_btn
+            if selector == 'button[aria-label="Fotos e vídeos"]':
+                return media_btn
             if selector in (
                 'div[contenteditable="true"][data-lexical-editor="true"]',
                 'div[contenteditable="true"][role="textbox"]',
@@ -178,7 +226,9 @@ class TestSendImageWithCaption:
             ):
                 return caption_el
             if selector in (
+                'button[aria-label="Enviar"]',
                 'button[aria-label="Send"]',
+                'button[title="Send"]',
                 'button[data-testid="compose-btn-send"]',
                 'span[data-icon="send"]',
             ):
@@ -202,10 +252,48 @@ class TestSendImageWithCaption:
         )
 
         assert result is True
-        page.click.assert_any_call('button[aria-label="Attach"]')
-        page.click.assert_any_call('button[aria-label="Photos & videos"]')
+        page.click.assert_any_call('button[aria-label="Anexar"]')
+        page.click.assert_any_call('button[aria-label="Fotos e vídeos"]')
         caption_el.fill.assert_called_with("Test caption")
         send_btn.click.assert_called()
+
+    def test_send_success_with_direct_file_input_fallback(self):
+        page = MagicMock()
+        file_input = MagicMock()
+        caption_el = MagicMock()
+        send_btn = MagicMock()
+
+        def wait_for_selector_side_effect(selector, timeout=None):
+            if selector == 'footer div[contenteditable="true"][role="textbox"]':
+                return MagicMock()
+            if selector == 'button[aria-label="Anexar"]':
+                return MagicMock()
+            if selector == 'input[type="file"][accept*="image"]':
+                return file_input
+            if selector in (
+                'div[contenteditable="true"][data-lexical-editor="true"]',
+                'div[contenteditable="true"][role="textbox"]',
+                'div[contenteditable="true"]',
+            ):
+                return caption_el
+            if selector in (
+                'button[aria-label="Enviar"]',
+                'button[aria-label="Send"]',
+                'button[title="Send"]',
+                'button[data-testid="compose-btn-send"]',
+                'span[data-icon="send"]',
+            ):
+                return send_btn
+            raise Exception("not found")
+
+        page.wait_for_selector.side_effect = wait_for_selector_side_effect
+
+        result = _send_image_with_caption(
+            page, "/tmp/test.jpg", "Test caption", delay_between=0.1
+        )
+
+        assert result is True
+        file_input.set_input_files.assert_called_with("/tmp/test.jpg")
 
     def test_send_failure_returns_false(self):
         page = MagicMock()
@@ -236,6 +324,7 @@ class TestSendDealsIntegration:
             {
                 "title": "Mouse Gamer",
                 "url": "https://example.com/1",
+                "dedup_key": "deal-1",
                 "image_url": "https://example.com/mouse.jpg",
                 "message": "Test message 1",
             }
@@ -255,6 +344,7 @@ class TestSendDealsIntegration:
 
         assert results["sent"] == 1
         assert results["failed"] == 0
+        assert results["successful_keys"] == ["deal-1"]
 
     @patch("playwright.sync_api.sync_playwright")
     def test_send_deals_no_image_url(self, mock_playwright):
@@ -273,6 +363,7 @@ class TestSendDealsIntegration:
             {
                 "title": "Product No Image",
                 "url": "https://example.com/1",
+                "dedup_key": "deal-1",
                 "image_url": None,
                 "message": "Test message",
             }
@@ -289,6 +380,7 @@ class TestSendDealsIntegration:
         assert results["sent"] == 0
         assert results["failed"] == 1
         assert results["errors"][0]["reason"] == "no image_url"
+        assert results["errors"][0]["url"] == "https://example.com/1"
 
 
 class TestCliGroupResolution:

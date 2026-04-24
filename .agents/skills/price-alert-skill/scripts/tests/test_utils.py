@@ -10,11 +10,13 @@ import pytest
 from utils import (
     calculate_discount,
     deal_fingerprint,
+    deal_dedup_key,
     detect_category_emoji,
     filter_new_deals,
     format_deal_message,
     format_price_brl,
     load_sent_deals,
+    mark_deals_as_sent,
     save_sent_deals,
 )
 
@@ -187,6 +189,16 @@ class TestDealFingerprint:
         assert deal_fingerprint(deal1) != deal_fingerprint(deal2)
 
 
+class TestDealDedupKey:
+    def test_prefers_explicit_dedup_key(self):
+        deal = {"url": "https://example.com/public", "dedup_key": "internal-key"}
+        assert deal_dedup_key(deal) == "internal-key"
+
+    def test_falls_back_to_url(self):
+        deal = {"url": "https://example.com/public"}
+        assert deal_dedup_key(deal) == "https://example.com/public"
+
+
 class TestSentDealsPersistence:
     def test_load_sent_deals_empty(self):
         with patch("utils.SENT_DEALS_FILE", Path("/nonexistent/path.json")):
@@ -254,3 +266,24 @@ class TestFilterNewDeals:
             new_deals, _ = filter_new_deals(deals, sent_data=existing, auto_save=False)
 
             assert len(new_deals) == 0
+
+    def test_filter_without_marking_as_sent(self, tmp_path):
+        test_file = tmp_path / "sent_deals.json"
+        with patch("utils.SENT_DEALS_FILE", test_file):
+            deals = [{"url": "https://example.com/p1", "dedup_key": "deal-1", "current_price": 100.0}]
+            new_deals, sent_data = filter_new_deals(deals, auto_save=False, mark_as_sent=False)
+
+            assert len(new_deals) == 1
+            assert sent_data["sent"] == {}
+
+
+class TestMarkDealsAsSent:
+    def test_marks_dedup_key_after_success(self, tmp_path):
+        test_file = tmp_path / "sent_deals.json"
+        with patch("utils.SENT_DEALS_FILE", test_file):
+            deals = [{"url": "https://example.com/public", "dedup_key": "deal-1", "current_price": 100.0}]
+            sent_data = mark_deals_as_sent(deals, auto_save=True)
+
+            assert "deal-1" in sent_data["sent"]
+            persisted = json.loads(test_file.read_text())
+            assert "deal-1" in persisted["sent"]

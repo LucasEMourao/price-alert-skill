@@ -134,17 +134,22 @@ def deal_fingerprint(deal: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def deal_dedup_key(deal: dict[str, Any]) -> str:
+    """Resolve the stable deduplication key for a deal."""
+    return deal.get("dedup_key") or deal["url"]
+
+
 def load_sent_deals() -> dict[str, Any]:
     """Load sent deals from disk, return empty structure if missing."""
     if SENT_DEALS_FILE.exists():
-        return json.loads(SENT_DEALS_FILE.read_text())
+        return json.loads(SENT_DEALS_FILE.read_text(encoding="utf-8"))
     return {"sent": {}, "last_cleaned": None}
 
 
 def save_sent_deals(data: dict[str, Any]) -> None:
     """Persist sent deals to disk."""
     SENT_DEALS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SENT_DEALS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    SENT_DEALS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def clean_old_deals(data: dict[str, Any], max_age_days: int = DEDUP_RETENTION_DAYS) -> dict[str, Any]:
@@ -168,6 +173,7 @@ def filter_new_deals(
     deals: list[dict[str, Any]],
     sent_data: dict[str, Any] | None = None,
     auto_save: bool = True,
+    mark_as_sent: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Filter out deals already sent in previous runs.
 
@@ -185,12 +191,36 @@ def filter_new_deals(
     now = datetime.now(timezone.utc).isoformat()
 
     for deal in deals:
-        url = deal["url"]
-        if url not in sent_urls:
-            sent_data["sent"][url] = now
+        dedup_key = deal_dedup_key(deal)
+        if dedup_key not in sent_urls:
+            if mark_as_sent:
+                sent_data["sent"][dedup_key] = now
             new_deals.append(deal)
 
     if auto_save:
         save_sent_deals(sent_data)
 
     return new_deals, sent_data
+
+
+def mark_deals_as_sent(
+    deals: list[dict[str, Any]],
+    sent_data: dict[str, Any] | None = None,
+    auto_save: bool = True,
+) -> dict[str, Any]:
+    """Persist deals as sent after the downstream action succeeds."""
+    from datetime import datetime, timezone
+
+    if sent_data is None:
+        sent_data = load_sent_deals()
+
+    sent_data = clean_old_deals(sent_data)
+    now = datetime.now(timezone.utc).isoformat()
+
+    for deal in deals:
+        sent_data["sent"][deal_dedup_key(deal)] = now
+
+    if auto_save:
+        save_sent_deals(sent_data)
+
+    return sent_data

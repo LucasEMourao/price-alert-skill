@@ -15,10 +15,13 @@ Usage:
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
+
+from config import configure_utf8_stdio
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
@@ -84,18 +87,42 @@ def save_cache(cache: dict[str, str]) -> None:
 
 # --- Session ---
 
+def _get_page_text_snapshot(page: Page, retries: int = 5, delay_ms: int = 1000) -> tuple[str, str, str]:
+    """Read page state while tolerating short redirect windows after login."""
+    last_exc: Exception | None = None
+    for _ in range(retries):
+        try:
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=5000)
+            except Exception:
+                pass
+            content = page.content().lower()
+            title = page.title().lower()
+            url = page.url.lower()
+            return content, title, url
+        except Exception as exc:
+            last_exc = exc
+            page.wait_for_timeout(delay_ms)
+
+    if last_exc:
+        raise last_exc
+    return "", "", (page.url or "").lower()
+
+
 def _is_logged_in(page: Page) -> bool:
     try:
-        page.wait_for_load_state("domcontentloaded", timeout=10000)
+        content, title, current_url = _get_page_text_snapshot(page)
     except Exception:
-        pass
-    content = page.content().lower()
-    title = page.title().lower()
+        current_url = (page.url or "").lower()
+        return "login" not in current_url and "autentic" not in current_url
+
     if "iniciar sess" in content or "iniciar sess" in title:
         return False
     if "digite seu e-mail" in content:
         return False
     if "hubo un error" in content:
+        return False
+    if "login" in current_url or "autentic" in current_url:
         return False
     return True
 
@@ -121,6 +148,7 @@ def login_interactive() -> bool:
 
         page.goto(AFFILIATE_HUB_URL, wait_until="domcontentloaded", timeout=30000)
         input()
+        page.wait_for_timeout(3000)
 
         if not _is_logged_in(page):
             page.goto(LINK_BUILDER_URL, wait_until="domcontentloaded", timeout=30000)
@@ -279,6 +307,7 @@ def generate_links(urls: list[str], delay_between: float = 3.0) -> dict[str, str
 # --- Main ---
 
 def main() -> None:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(
         description="Generate meli.la affiliate links via ML affiliate panel using Playwright."
     )

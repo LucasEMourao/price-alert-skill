@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from config import resolve_whatsapp_group
+from config import configure_utf8_stdio, resolve_whatsapp_group
 from fetch_amazon_br import run as run_amazon
 from fetch_ml_browser import run as run_mercadolivre_browser
 from generate_melila_links import generate_links
@@ -25,6 +25,7 @@ from utils import (
     calculate_discount,
     filter_new_deals,
     format_deal_message,
+    mark_deals_as_sent,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,13 +37,26 @@ GAMER_QUERIES = [
     "headset gamer",
     "monitor gamer",
     "ssd 2tb",
+    "ssd nvme 1tb",
+    "ssd nvme 2tb",
+    "ssd sata 1tb",
     "memoria ram ddr5",
+    "memoria ram ddr4",
     "placa de video rtx",
+    "placa de video rx",
+    "placa mae am5",
+    "placa mae lga1700",
+    "processador ryzen",
+    "processador intel core",
     "notebook gamer",
     "gabinete gamer",
-    "fonte gamer",
-    "cooler gamer",
+    "fonte 650w",
+    "fonte 750w",
+    "air cooler",
+    "water cooler",
     "mousepad gamer",
+    "webcam full hd",
+    "microfone usb",
 ]
 
 
@@ -76,6 +90,7 @@ def extract_deals_from_products(
         deals.append({
             "title": title,
             "url": url,
+            "dedup_key": url,
             "image_url": product.get("image_url"),
             "marketplace": marketplace,
             "current_price": current_price,
@@ -128,6 +143,7 @@ def scan_all(
 
 
 def main() -> None:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Scan marketplaces for products with displayed discounts.")
     parser.add_argument("query", nargs="?", help="Search query (omit if using --all)")
     parser.add_argument("--all", action="store_true", help="Scan all gamer categories")
@@ -142,6 +158,11 @@ def main() -> None:
         help="WhatsApp group name (defaults to WHATSAPP_GROUP from .env)",
     )
     parser.add_argument("--headed", action="store_true", help="Open browser window for WhatsApp (needed for first-time QR scan)")
+    parser.add_argument(
+        "--reset-whatsapp-session",
+        action="store_true",
+        help="Delete the persisted WhatsApp Web session before opening the browser",
+    )
     args = parser.parse_args()
 
     if not args.query and not args.all:
@@ -164,7 +185,13 @@ def main() -> None:
             unique_deals.append(deal)
 
     # Deduplicate against previously sent deals (cross-session)
-    unique_deals, sent_data = filter_new_deals(unique_deals, auto_save=True)
+    # When WhatsApp sending is enabled, only persist dedup after each deal is
+    # confirmed as sent. This avoids losing deals on partial delivery failures.
+    unique_deals, sent_data = filter_new_deals(
+        unique_deals,
+        auto_save=not args.send_whatsapp,
+        mark_as_sent=not args.send_whatsapp,
+    )
     skipped = len(deals) - len(unique_deals)
     if skipped > 0:
         print(f"Skipped {skipped} already-sent deals")
@@ -208,7 +235,7 @@ def main() -> None:
         Path(output_path).write_text(json.dumps(
             {"messages": messages, "count": len(messages), "generated_at": now.isoformat()},
             ensure_ascii=False, indent=2,
-        ))
+        ), encoding="utf-8")
         print(f"Saved to: {output_path}")
 
         # Print messages
@@ -234,6 +261,7 @@ def main() -> None:
             deals_for_whatsapp.append({
                 "title": msg["title"],
                 "url": msg["url"],
+                "dedup_key": deal["dedup_key"],
                 "image_url": deal.get("image_url"),
                 "message": msg["message"],
             })
@@ -242,12 +270,21 @@ def main() -> None:
             deals=deals_for_whatsapp,
             group_name=group,
             headed=args.headed,
+            reset_session=args.reset_whatsapp_session,
         )
 
         print(f"\nWhatsApp results: {results['sent']} sent, {results['failed']} failed")
         if results["errors"]:
             for err in results["errors"]:
                 print(f"  - {err['title']}: {err['reason']}")
+
+        successful_keys = set(results.get("successful_keys", []))
+        if successful_keys:
+            mark_deals_as_sent(
+                [deal for deal in unique_deals if deal["dedup_key"] in successful_keys],
+                sent_data=sent_data,
+                auto_save=True,
+            )
 
 
 if __name__ == "__main__":

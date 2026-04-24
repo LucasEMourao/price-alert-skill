@@ -17,6 +17,7 @@ the QR code once. Use --headed on first run to scan the QR code.
 import argparse
 import json
 import os
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -24,22 +25,82 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
-from config import resolve_whatsapp_group
+from config import (
+    configure_utf8_stdio,
+    resolve_whatsapp_chrome_path,
+    resolve_whatsapp_group,
+    resolve_whatsapp_profile_dir,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SESSION_DIR = ROOT / "data" / "whatsapp_session"
-USER_DATA_DIR = str(SESSION_DIR / "chrome_profile")
-USER_DATA_DIR = str(SESSION_DIR / "chrome_profile")
+DEBUG_DIR = ROOT / "data" / "debug"
+USER_DATA_DIR = resolve_whatsapp_profile_dir()
 
 _WHATSAPP_URL = "https://web.whatsapp.com"
 
-_ATTACH_BUTTON_SELECTOR = 'button[aria-label="Attach"]'
-_CAPTION_SELECTOR = 'div[contenteditable="true"][data-lexical-editor="true"]'
-_SEND_BUTTON_SELECTOR = 'button[aria-label="Send"]'
-_GROUP_SEARCH_SELECTOR = 'input[aria-label="Search or start a new chat"]'
 _GROUP_ITEM_SELECTOR = '[role="gridcell"]'
-_QR_CODE_SELECTOR = 'canvas[aria-label*="Scan"], img[alt*="QR"]'
+_ATTACH_BUTTON_SELECTORS = [
+    'button[aria-label="Anexar"]',
+    'button[title="Anexar"]',
+    'button[aria-label="Attach"]',
+    'button[title="Attach"]',
+    '[data-testid="attach-menu-plus"]',
+    'span[data-icon="plus-rounded"]',
+]
+_PHOTO_VIDEO_SELECTORS = [
+    'button[aria-label="Fotos e vídeos"]',
+    'button[title="Fotos e vídeos"]',
+    'button[aria-label="Photos & videos"]',
+    'button[title="Photos & videos"]',
+    '[data-testid="attach-image"]',
+]
+_FILE_INPUT_SELECTORS = [
+    'input[type="file"][accept*="image"]',
+    'input[type="file"]',
+]
+_CAPTION_SELECTORS = [
+    'div[contenteditable="true"][data-lexical-editor="true"]',
+    'div[contenteditable="true"][role="textbox"]',
+    'div[contenteditable="true"]',
+]
+_SEND_BUTTON_SELECTORS = [
+    'button[aria-label="Enviar"]',
+    'button[title="Enviar"]',
+    'button[aria-label="Send"]',
+    'button[title="Send"]',
+    'button[data-testid="compose-btn-send"]',
+    'span[data-icon="send"]',
+]
+_COMPOSER_READY_SELECTORS = [
+    'footer div[contenteditable="true"][role="textbox"]',
+    '#main footer [contenteditable="true"]',
+    '#main footer button',
+]
+_QR_CODE_SELECTORS = [
+    'canvas[aria-label*="Scan"]',
+    'canvas[aria-label*="QR"]',
+    'img[alt*="QR"]',
+    '[data-testid="qrcode"] canvas',
+]
 _MAIN_PANEL_SELECTOR = '#pane-side'
+_LOGGED_IN_SELECTORS = [
+    _MAIN_PANEL_SELECTOR,
+    "#side",
+    '[data-testid="chat-list-search"]',
+]
+_GROUP_SEARCH_SELECTORS = [
+    'input[aria-label="Search or start a new chat"]',
+    'input[aria-label="Pesquisar ou começar uma nova conversa"]',
+    'div[role="textbox"][contenteditable="true"]',
+]
+_LOGOUT_URL_MARKERS = ("post_logout", "logout_reason")
+_GROUP_SEARCH_SELECTORS.extend(
+    [
+        'input[aria-label="Pesquisar ou começar uma nova conversa"]',
+        'div[aria-label="Pesquisar ou começar uma nova conversa"]',
+    ]
+)
 
 
 def _download_image(url: str, timeout: int = 30) -> str | None:
@@ -64,6 +125,46 @@ def _download_image(url: str, timeout: int = 30) -> str | None:
         return None
 
 
+def _reset_whatsapp_session() -> None:
+    """Remove the persisted WhatsApp Web browser profile."""
+    session_path = Path(USER_DATA_DIR)
+    if not session_path.exists():
+        return
+
+    print(f"  Resetting WhatsApp session at: {session_path}")
+    shutil.rmtree(session_path, ignore_errors=True)
+
+
+def _capture_whatsapp_debug_artifacts(page, prefix: str = "whatsapp_auth") -> None:
+    """Persist a screenshot and HTML snapshot to help debug auth issues."""
+    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    screenshot_path = DEBUG_DIR / f"{prefix}_{timestamp}.png"
+    html_path = DEBUG_DIR / f"{prefix}_{timestamp}.html"
+    meta_path = DEBUG_DIR / f"{prefix}_{timestamp}.txt"
+
+    try:
+        page.screenshot(path=str(screenshot_path), full_page=True)
+        print(f"  Saved WhatsApp debug screenshot to: {screenshot_path}")
+    except Exception as exc:
+        print(f"  WARNING: Failed to save WhatsApp screenshot: {exc}")
+
+    try:
+        html_path.write_text(page.content(), encoding="utf-8")
+        print(f"  Saved WhatsApp debug HTML to: {html_path}")
+    except Exception as exc:
+        print(f"  WARNING: Failed to save WhatsApp HTML snapshot: {exc}")
+
+    try:
+        meta_path.write_text(
+            f"url={page.url}\nstate={_get_whatsapp_state(page)}\n",
+            encoding="utf-8",
+        )
+        print(f"  Saved WhatsApp debug metadata to: {meta_path}")
+    except Exception as exc:
+        print(f"  WARNING: Failed to save WhatsApp metadata: {exc}")
+
+
 def _wait_for_whatsapp_load(page, timeout_ms: int = 60000) -> bool:
     """Wait for WhatsApp Web to load. Returns True if logged in, False if QR code shown."""
     try:
@@ -73,48 +174,181 @@ def _wait_for_whatsapp_load(page, timeout_ms: int = 60000) -> bool:
         return False
 
 
+def _page_has_any_visible_selector(page, selectors: list[str]) -> bool:
+    """Return True when at least one selector is visible on the page."""
+    for selector in selectors:
+        try:
+            locator = page.locator(selector).first
+            if locator and locator.is_visible():
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _get_whatsapp_state(page) -> str:
+    """Classify the current WhatsApp Web state."""
+    try:
+        current_url = (page.url or "").lower()
+    except Exception:
+        current_url = ""
+
+    if any(marker in current_url for marker in _LOGOUT_URL_MARKERS):
+        return "logged_out"
+
+    if _page_has_any_visible_selector(page, _LOGGED_IN_SELECTORS):
+        return "logged_in"
+
+    if _page_has_any_visible_selector(page, _QR_CODE_SELECTORS):
+        return "qr"
+
+    return "loading"
+
+
 def _is_logged_in(page) -> bool:
     """Check if WhatsApp Web is logged in (no QR code visible)."""
-    try:
-        qr = page.query_selector(_QR_CODE_SELECTOR)
-        return qr is None
-    except Exception:
-        return True
+    return _get_whatsapp_state(page) == "logged_in"
 
 
-def _ensure_logged_in(page, headed: bool = False, timeout_ms: int = 120000) -> None:
+def _find_group_search_box(page, timeout_ms: int = 15000):
+    """Find the WhatsApp group search input across UI locales/variants."""
+    _, locator = _wait_for_any_selector(
+        page,
+        _GROUP_SEARCH_SELECTORS,
+        timeout_ms=timeout_ms,
+        error_message="Could not find the WhatsApp search input.",
+    )
+    return locator
+
+
+def _wait_for_any_selector(
+    page,
+    selectors: list[str],
+    timeout_ms: int = 15000,
+    error_message: str = "Could not find any matching selector.",
+):
+    """Wait until one of the selectors appears and return (selector, element)."""
+    deadline = time.time() + (timeout_ms / 1000)
+    while time.time() < deadline:
+        for selector in selectors:
+            try:
+                locator = page.wait_for_selector(selector, timeout=1000)
+                if locator:
+                    return selector, locator
+            except Exception:
+                continue
+    raise TimeoutError(error_message)
+
+
+def _ensure_logged_in(page, headed: bool = False, timeout_ms: int = 300000) -> None:
     """Ensure we are logged in to WhatsApp Web. If not, wait for QR scan."""
     print("  Waiting for WhatsApp to load...")
-    
-    app_loaded = False
+
     try:
-        page.wait_for_selector('#side', timeout=30000)
-        app_loaded = True
+        page.wait_for_load_state("domcontentloaded", timeout=30000)
     except Exception:
         pass
-    
-    if not app_loaded:
-        print("  App did not load, checking for QR code...")
-    
-    if _is_logged_in(page):
+
+    state = _get_whatsapp_state(page)
+    if state == "logged_in":
         print("  Session found, already logged in.")
         return
 
-    if headed:
-        print("  QR code detected. Please scan with your phone...")
-        print(f"  Waiting up to {timeout_ms // 1000}s for authentication...")
-        start = time.time()
-        while time.time() - start < timeout_ms / 1000:
-            if _is_logged_in(page):
-                print("  Logged in successfully!")
+    print(f"  WhatsApp state detected: {state}")
+    try:
+        print(f"  WhatsApp URL: {page.url}")
+    except Exception:
+        pass
+
+    if not headed:
+        print("  Running without --headed. Waiting for an existing session to finish loading...")
+        deadline = time.time() + 45
+        last_state = None
+
+        while time.time() < deadline:
+            state = _get_whatsapp_state(page)
+            if state != last_state:
+                print(f"  WhatsApp auth state: {state}")
+                try:
+                    print(f"  WhatsApp auth URL: {page.url}")
+                except Exception:
+                    pass
+                last_state = state
+
+            if state == "logged_in":
+                print("  Session found, already logged in.")
                 return
+
+            if state in {"logged_out", "qr"}:
+                raise RuntimeError(
+                    "Not logged in. Run with --headed to scan QR code first. "
+                    "Session will be saved for future runs."
+                )
+
             time.sleep(2)
-        raise TimeoutError("QR code scan timed out. Try again with --headed.")
-    else:
+
         raise RuntimeError(
-            "Not logged in. Run with --headed to scan QR code first. "
-            "Session will be saved for future runs."
+            "WhatsApp session did not finish loading in headless mode. "
+            "Run once with --headed to refresh the session if needed."
         )
+
+    print("  Waiting up to %ss for authentication..." % (timeout_ms // 1000))
+    qr_prompt_shown = False
+    last_state = None
+    login_reload_attempted = False
+    early_debug_captured = False
+    start = time.time()
+
+    while time.time() - start < timeout_ms / 1000:
+        state = _get_whatsapp_state(page)
+        elapsed = time.time() - start
+
+        if state != last_state:
+            print(f"  WhatsApp auth state: {state}")
+            try:
+                print(f"  WhatsApp auth URL: {page.url}")
+            except Exception:
+                pass
+            last_state = state
+
+        if state == "logged_in":
+            print("  Logged in successfully!")
+            return
+
+        if state == "logged_out":
+            if not qr_prompt_shown:
+                print("  WhatsApp is still preparing the login screen. Waiting for the QR to finish loading...")
+
+            if elapsed >= 45 and not early_debug_captured:
+                _capture_whatsapp_debug_artifacts(page, prefix="whatsapp_auth_stuck")
+                early_debug_captured = True
+
+            if elapsed >= 90 and not login_reload_attempted:
+                print("  Login screen is still stuck after 90s. Trying a single refresh...")
+                page.reload(wait_until="domcontentloaded", timeout=60000)
+                login_reload_attempted = True
+                time.sleep(2)
+                continue
+
+        if state == "qr" and not qr_prompt_shown:
+            print("  QR code detected. Please scan with your phone...")
+            qr_prompt_shown = True
+        elif qr_prompt_shown and state == "loading":
+            print("  QR scan detected, waiting for WhatsApp to finish loading...")
+            qr_prompt_shown = False
+        elif state == "loading" and elapsed >= 45 and not early_debug_captured:
+            print("  WhatsApp login screen is still loading after 45s; saving debug artifacts...")
+            _capture_whatsapp_debug_artifacts(page, prefix="whatsapp_auth_loading")
+            early_debug_captured = True
+
+        time.sleep(2)
+
+    _capture_whatsapp_debug_artifacts(page, prefix="whatsapp_auth_timeout")
+
+    raise TimeoutError(
+        "WhatsApp authentication timed out. If you scanned the QR code, "
+        "keep the browser open a bit longer and try again with --headed."
+    )
 
 
 def _search_and_open_group(page, group_name: str, timeout_ms: int = 15000) -> None:
@@ -122,7 +356,7 @@ def _search_and_open_group(page, group_name: str, timeout_ms: int = 15000) -> No
     print(f"  Searching for group: {group_name}")
 
     try:
-        search_box = page.wait_for_selector(_GROUP_SEARCH_SELECTOR, timeout=5000)
+        search_box = _find_group_search_box(page, timeout_ms=timeout_ms)
         search_box.click()
         time.sleep(0.5)
         search_box.fill(group_name)
@@ -152,39 +386,66 @@ def _send_image_with_caption(
 ) -> bool:
     """Send an image with a caption to the currently open chat."""
     try:
-        # Click attach button
-        page.wait_for_selector(_ATTACH_BUTTON_SELECTOR, timeout=5000)
-        page.click(_ATTACH_BUTTON_SELECTOR)
+        # Wait for the composer to settle after opening the chat.
+        _wait_for_any_selector(
+            page,
+            _COMPOSER_READY_SELECTORS + _ATTACH_BUTTON_SELECTORS,
+            timeout_ms=15000,
+            error_message="WhatsApp composer did not become ready.",
+        )
+
+        # Click the attach button with pt-BR selectors first, then fall back.
+        attach_selector, _ = _wait_for_any_selector(
+            page,
+            _ATTACH_BUTTON_SELECTORS,
+            timeout_ms=10000,
+            error_message="Could not find the WhatsApp attach button.",
+        )
+        page.click(attach_selector)
         time.sleep(1)
 
-        # Click "Photos & videos" to open file chooser
-        with page.expect_file_chooser() as fc_info:
-            page.click('button[aria-label="Photos & videos"]')
+        # Prefer the explicit photos/videos action; fall back to a direct file input.
+        media_selector = None
+        try:
+            media_selector, _ = _wait_for_any_selector(
+                page,
+                _PHOTO_VIDEO_SELECTORS,
+                timeout_ms=5000,
+                error_message="Could not find the WhatsApp photos/videos action.",
+            )
+        except Exception:
+            media_selector = None
 
-        file_chooser = fc_info.value
-        file_chooser.set_files(image_path)
+        if media_selector:
+            with page.expect_file_chooser() as fc_info:
+                page.click(media_selector)
+            file_chooser = fc_info.value
+            file_chooser.set_files(image_path)
+        else:
+            _, file_input = _wait_for_any_selector(
+                page,
+                _FILE_INPUT_SELECTORS,
+                timeout_ms=5000,
+                error_message="Could not find a WhatsApp file input.",
+            )
+            file_input.set_input_files(image_path)
         
         # Wait for image preview to appear
         time.sleep(3)
         print(f"  Image loaded, adding caption...")
 
-        # Find and fill the caption field
-        # The caption field is the "Type a message" input that appears when image is selected
-        caption_selectors = [
-            'div[contenteditable="true"][data-lexical-editor="true"]',
-            'div[contenteditable="true"][role="textbox"]',
-            'div[contenteditable="true"]',
-        ]
-        
+        # Find and fill the caption field.
         caption_el = None
-        for selector in caption_selectors:
-            try:
-                caption_el = page.wait_for_selector(selector, timeout=3000)
-                if caption_el:
-                    break
-            except Exception:
-                continue
-        
+        try:
+            _, caption_el = _wait_for_any_selector(
+                page,
+                _CAPTION_SELECTORS,
+                timeout_ms=9000,
+                error_message="Could not find the WhatsApp caption field.",
+            )
+        except Exception:
+            caption_el = None
+
         if caption_el:
             caption_el.click()
             time.sleep(0.3)
@@ -193,15 +454,9 @@ def _send_image_with_caption(
         else:
             print(f"  WARNING: Could not find caption field, sending without caption")
 
-        # Click the green send button
-        send_selectors = [
-            'button[aria-label="Send"]',
-            'button[data-testid="compose-btn-send"]',
-            'span[data-icon="send"]',
-        ]
-        
+        # Click the send button, preferring pt-BR labels first.
         sent = False
-        for selector in send_selectors:
+        for selector in _SEND_BUTTON_SELECTORS:
             try:
                 send_btn = page.wait_for_selector(selector, timeout=3000)
                 if send_btn:
@@ -222,6 +477,7 @@ def _send_image_with_caption(
 
     except Exception as exc:
         print(f"  ERROR: Failed to send image: {exc}")
+        _capture_whatsapp_debug_artifacts(page, prefix="whatsapp_send_failure")
         try:
             page.keyboard.press("Escape")
             time.sleep(0.5)
@@ -236,6 +492,7 @@ def send_deals_to_whatsapp(
     headed: bool = False,
     delay_between: float = 5.0,
     max_retries: int = 2,
+    reset_session: bool = False,
 ) -> dict[str, Any]:
     """Send deal messages to a WhatsApp group.
 
@@ -245,16 +502,21 @@ def send_deals_to_whatsapp(
         headed: Open browser window (needed for first-time QR scan).
         delay_between: Seconds to wait between messages.
         max_retries: Number of retries per failed message.
+        reset_session: Remove the persisted browser profile before opening WhatsApp.
 
     Returns:
-        Dict with 'sent', 'failed', 'errors' counts and details.
+        Dict with 'sent', 'failed', 'errors', and 'successful_keys'.
     """
     from playwright.sync_api import sync_playwright
 
-    results = {"sent": 0, "failed": 0, "errors": []}
+    results = {"sent": 0, "failed": 0, "errors": [], "successful_keys": []}
 
     with sync_playwright() as p:
         import glob as _glob
+
+        if reset_session:
+            _reset_whatsapp_session()
+
         # Clean up old lock file that can prevent browser from starting
         for lock_file in _glob.glob(str(Path(USER_DATA_DIR) / "SingletonLock")):
             try:
@@ -262,22 +524,42 @@ def send_deals_to_whatsapp(
             except OSError:
                 pass
 
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=USER_DATA_DIR,
-            headless=not headed,
-            viewport={"width": 1280, "height": 720},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/131.0.0.0 Safari/537.36"
-            ),
-            locale="pt-BR",
-            timezone_id="America/Sao_Paulo",
-            args=[
+        chrome_path = resolve_whatsapp_chrome_path()
+        Path(USER_DATA_DIR).mkdir(parents=True, exist_ok=True)
+        launch_kwargs = {
+            "user_data_dir": USER_DATA_DIR,
+            "headless": not headed,
+            "viewport": {"width": 1280, "height": 720},
+            "locale": "pt-BR",
+            "timezone_id": "America/Sao_Paulo",
+            "ignore_default_args": ["--enable-automation"],
+            "args": [
                 "--disable-blink-features=AutomationControlled",
                 "--disable-dev-shm-usage",
-                "--no-sandbox",
+                "--disable-infobars",
             ],
+        }
+        if chrome_path:
+            print(f"Using Chrome executable for WhatsApp Web: {chrome_path}")
+            launch_kwargs["executable_path"] = chrome_path
+        else:
+            print("Using Playwright Chromium for WhatsApp Web.")
+        print(f"Using WhatsApp Chrome profile dir: {USER_DATA_DIR}")
+
+        context = p.chromium.launch_persistent_context(**launch_kwargs)
+        context.add_init_script(
+            """
+            Object.defineProperty(navigator, 'webdriver', {
+              get: () => undefined,
+            });
+            window.chrome = window.chrome || { runtime: {} };
+            Object.defineProperty(navigator, 'languages', {
+              get: () => ['pt-BR', 'pt', 'en-US', 'en'],
+            });
+            Object.defineProperty(navigator, 'plugins', {
+              get: () => [1, 2, 3, 4, 5],
+            });
+            """
         )
 
         page = context.new_page()
@@ -289,7 +571,7 @@ def send_deals_to_whatsapp(
         
         print("  Waiting for app to fully load (this may take 30-60s)...")
         try:
-            page.wait_for_selector('input[aria-label="Search or start a new chat"]', timeout=60000)
+            _find_group_search_box(page, timeout_ms=60000)
             print("  App loaded successfully!")
         except Exception:
             print("  WARNING: Search input did not appear, trying to continue anyway...")
@@ -300,6 +582,8 @@ def send_deals_to_whatsapp(
         for i, deal in enumerate(deals):
             title = deal.get("title", "Unknown")
             message = deal.get("message", "")
+            deal_url = deal.get("url", "")
+            dedup_key = deal.get("dedup_key") or deal_url
             image_url = deal.get("image_url")
 
             print(f"\n[{i + 1}/{len(deals)}] Sending: {title[:50]}...")
@@ -307,13 +591,13 @@ def send_deals_to_whatsapp(
             if not image_url:
                 print(f"  WARNING: No image_url for '{title}', skipping.")
                 results["failed"] += 1
-                results["errors"].append({"title": title, "reason": "no image_url"})
+                results["errors"].append({"title": title, "url": deal_url, "reason": "no image_url"})
                 continue
 
             image_path = _download_image(image_url)
             if not image_path:
                 results["failed"] += 1
-                results["errors"].append({"title": title, "reason": "download failed"})
+                results["errors"].append({"title": title, "url": deal_url, "reason": "download failed"})
                 continue
 
             success = False
@@ -328,9 +612,10 @@ def send_deals_to_whatsapp(
 
             if success:
                 results["sent"] += 1
+                results["successful_keys"].append(dedup_key)
             else:
                 results["failed"] += 1
-                results["errors"].append({"title": title, "reason": "send failed"})
+                results["errors"].append({"title": title, "url": deal_url, "reason": "send failed"})
 
             try:
                 Path(image_path).unlink()
@@ -347,6 +632,7 @@ def send_deals_to_whatsapp(
 
 
 def main() -> None:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(
         description="Send deal messages to WhatsApp groups via WhatsApp Web."
     )
@@ -376,6 +662,11 @@ def main() -> None:
         "--max-retries", type=int, default=2,
         help="Max retries per failed message (default: 2)"
     )
+    parser.add_argument(
+        "--reset-session",
+        action="store_true",
+        help="Delete the persisted WhatsApp Web session before opening the browser",
+    )
     args = parser.parse_args()
     group_name = resolve_whatsapp_group(args.group)
     if not group_name:
@@ -388,7 +679,7 @@ def main() -> None:
         if not deals_path.exists():
             print(f"Error: File not found: {deals_path}")
             return
-        data = json.loads(deals_path.read_text())
+        data = json.loads(deals_path.read_text(encoding="utf-8"))
         deals = data.get("messages", data.get("deals", []))
         if not deals:
             print("No deals found in the file.")
@@ -414,6 +705,7 @@ def main() -> None:
         headed=args.headed,
         delay_between=args.delay,
         max_retries=args.max_retries,
+        reset_session=args.reset_session,
     )
 
     print(f"\n{'=' * 40}")
