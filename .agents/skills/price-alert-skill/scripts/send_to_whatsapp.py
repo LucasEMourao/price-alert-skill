@@ -486,6 +486,172 @@ def _send_image_with_caption(
         return False
 
 
+def open_whatsapp_session(
+    *,
+    group_name: str,
+    headed: bool = False,
+    reset_session: bool = False,
+):
+    """Open a persistent WhatsApp Web session and land on the target group."""
+    from playwright.sync_api import sync_playwright
+
+    playwright = sync_playwright().start()
+    import glob as _glob
+
+    if reset_session:
+        _reset_whatsapp_session()
+
+    for lock_file in _glob.glob(str(Path(USER_DATA_DIR) / "SingletonLock")):
+        try:
+            Path(lock_file).unlink()
+        except OSError:
+            pass
+
+    chrome_path = resolve_whatsapp_chrome_path()
+    Path(USER_DATA_DIR).mkdir(parents=True, exist_ok=True)
+    launch_kwargs = {
+        "user_data_dir": USER_DATA_DIR,
+        "headless": not headed,
+        "viewport": {"width": 1280, "height": 720},
+        "locale": "pt-BR",
+        "timezone_id": "America/Sao_Paulo",
+        "ignore_default_args": ["--enable-automation"],
+        "args": [
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--disable-infobars",
+        ],
+    }
+    if chrome_path:
+        print(f"Using Chrome executable for WhatsApp Web: {chrome_path}")
+        launch_kwargs["executable_path"] = chrome_path
+    else:
+        print("Using Playwright Chromium for WhatsApp Web.")
+    print(f"Using WhatsApp Chrome profile dir: {USER_DATA_DIR}")
+
+    context = playwright.chromium.launch_persistent_context(**launch_kwargs)
+    context.add_init_script(
+        """
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => undefined,
+        });
+        window.chrome = window.chrome || { runtime: {} };
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['pt-BR', 'pt', 'en-US', 'en'],
+        });
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [1, 2, 3, 4, 5],
+        });
+        """
+    )
+
+    page = context.new_page()
+
+    print("Opening WhatsApp Web...")
+    page.goto(_WHATSAPP_URL, wait_until="domcontentloaded", timeout=60000)
+
+    _ensure_logged_in(page, headed=headed)
+
+    print("  Waiting for app to fully load (this may take 30-60s)...")
+    try:
+        _find_group_search_box(page, timeout_ms=60000)
+        print("  App loaded successfully!")
+    except Exception:
+        print("  WARNING: Search input did not appear, trying to continue anyway...")
+        time.sleep(15)
+
+    _search_and_open_group(page, group_name)
+    return {"playwright": playwright, "context": context, "page": page}
+
+
+def close_whatsapp_session(session: dict[str, Any] | None) -> None:
+    """Close a session opened with open_whatsapp_session safely."""
+    if not session:
+        return
+
+    context = session.get("context")
+    playwright = session.get("playwright")
+
+    try:
+        if context:
+            try:
+                context.close()
+            except Exception as exc:
+                print(f"  WARNING: Ignoring WhatsApp context shutdown error: {exc}")
+    finally:
+        if playwright:
+            try:
+                playwright.stop()
+            except Exception as exc:
+                print(f"  WARNING: Ignoring Playwright shutdown error: {exc}")
+
+
+def send_deal_in_open_chat(
+    page,
+    deal: dict[str, Any],
+    *,
+    delay_between: float = 5.0,
+    max_retries: int = 2,
+) -> dict[str, Any]:
+    """Send one deal using an already-open WhatsApp group page."""
+    title = deal.get("title", "Unknown")
+    deal_url = deal.get("url", "")
+    dedup_key = deal.get("dedup_key") or deal_url
+    image_url = deal.get("image_url")
+    message = deal.get("message", "")
+
+    if not image_url:
+        return {
+            "success": False,
+            "dedup_key": dedup_key,
+            "title": title,
+            "url": deal_url,
+            "reason": "no image_url",
+        }
+
+    image_path = _download_image(image_url)
+    if not image_path:
+        return {
+            "success": False,
+            "dedup_key": dedup_key,
+            "title": title,
+            "url": deal_url,
+            "reason": "download failed",
+        }
+
+    try:
+        success = False
+        for attempt in range(max_retries + 1):
+            if attempt > 0:
+                print(f"  Retry {attempt}/{max_retries}...")
+                time.sleep(2)
+
+            success = _send_image_with_caption(page, image_path, message, delay_between)
+            if success:
+                break
+
+        if success:
+            return {
+                "success": True,
+                "dedup_key": dedup_key,
+                "title": title,
+                "url": deal_url,
+            }
+
+        return {
+            "success": False,
+            "dedup_key": dedup_key,
+            "title": title,
+            "url": deal_url,
+            "reason": "send failed",
+        }
+    finally:
+        try:
+            Path(image_path).unlink()
+        except Exception:
+            pass
+
+
 def send_deals_to_whatsapp(
     deals: list[dict[str, Any]],
     group_name: str,
@@ -507,126 +673,41 @@ def send_deals_to_whatsapp(
     Returns:
         Dict with 'sent', 'failed', 'errors', and 'successful_keys'.
     """
-    from playwright.sync_api import sync_playwright
-
     results = {"sent": 0, "failed": 0, "errors": [], "successful_keys": []}
-
-    with sync_playwright() as p:
-        import glob as _glob
-
-        if reset_session:
-            _reset_whatsapp_session()
-
-        # Clean up old lock file that can prevent browser from starting
-        for lock_file in _glob.glob(str(Path(USER_DATA_DIR) / "SingletonLock")):
-            try:
-                Path(lock_file).unlink()
-            except OSError:
-                pass
-
-        chrome_path = resolve_whatsapp_chrome_path()
-        Path(USER_DATA_DIR).mkdir(parents=True, exist_ok=True)
-        launch_kwargs = {
-            "user_data_dir": USER_DATA_DIR,
-            "headless": not headed,
-            "viewport": {"width": 1280, "height": 720},
-            "locale": "pt-BR",
-            "timezone_id": "America/Sao_Paulo",
-            "ignore_default_args": ["--enable-automation"],
-            "args": [
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--disable-infobars",
-            ],
-        }
-        if chrome_path:
-            print(f"Using Chrome executable for WhatsApp Web: {chrome_path}")
-            launch_kwargs["executable_path"] = chrome_path
-        else:
-            print("Using Playwright Chromium for WhatsApp Web.")
-        print(f"Using WhatsApp Chrome profile dir: {USER_DATA_DIR}")
-
-        context = p.chromium.launch_persistent_context(**launch_kwargs)
-        context.add_init_script(
-            """
-            Object.defineProperty(navigator, 'webdriver', {
-              get: () => undefined,
-            });
-            window.chrome = window.chrome || { runtime: {} };
-            Object.defineProperty(navigator, 'languages', {
-              get: () => ['pt-BR', 'pt', 'en-US', 'en'],
-            });
-            Object.defineProperty(navigator, 'plugins', {
-              get: () => [1, 2, 3, 4, 5],
-            });
-            """
-        )
-
-        page = context.new_page()
-
-        print("Opening WhatsApp Web...")
-        page.goto(_WHATSAPP_URL, wait_until="domcontentloaded", timeout=60000)
-        
-        _ensure_logged_in(page, headed=headed)
-        
-        print("  Waiting for app to fully load (this may take 30-60s)...")
-        try:
-            _find_group_search_box(page, timeout_ms=60000)
-            print("  App loaded successfully!")
-        except Exception:
-            print("  WARNING: Search input did not appear, trying to continue anyway...")
-            time.sleep(15)
-        
-        _search_and_open_group(page, group_name)
-
+    session = open_whatsapp_session(
+        group_name=group_name,
+        headed=headed,
+        reset_session=reset_session,
+    )
+    page = session["page"]
+    try:
         for i, deal in enumerate(deals):
             title = deal.get("title", "Unknown")
-            message = deal.get("message", "")
-            deal_url = deal.get("url", "")
-            dedup_key = deal.get("dedup_key") or deal_url
-            image_url = deal.get("image_url")
-
             print(f"\n[{i + 1}/{len(deals)}] Sending: {title[:50]}...")
-
-            if not image_url:
-                print(f"  WARNING: No image_url for '{title}', skipping.")
-                results["failed"] += 1
-                results["errors"].append({"title": title, "url": deal_url, "reason": "no image_url"})
-                continue
-
-            image_path = _download_image(image_url)
-            if not image_path:
-                results["failed"] += 1
-                results["errors"].append({"title": title, "url": deal_url, "reason": "download failed"})
-                continue
-
-            success = False
-            for attempt in range(max_retries + 1):
-                if attempt > 0:
-                    print(f"  Retry {attempt}/{max_retries}...")
-                    time.sleep(2)
-
-                success = _send_image_with_caption(page, image_path, message, delay_between)
-                if success:
-                    break
-
-            if success:
+            attempt_result = send_deal_in_open_chat(
+                page,
+                deal,
+                delay_between=delay_between,
+                max_retries=max_retries,
+            )
+            if attempt_result["success"]:
                 results["sent"] += 1
-                results["successful_keys"].append(dedup_key)
+                results["successful_keys"].append(attempt_result["dedup_key"])
             else:
                 results["failed"] += 1
-                results["errors"].append({"title": title, "url": deal_url, "reason": "send failed"})
-
-            try:
-                Path(image_path).unlink()
-            except Exception:
-                pass
+                results["errors"].append(
+                    {
+                        "title": attempt_result["title"],
+                        "url": attempt_result["url"],
+                        "reason": attempt_result["reason"],
+                    }
+                )
 
         # Wait before closing to ensure messages are fully sent
         print("\n  Waiting for messages to sync...")
         time.sleep(5)
-
-        context.close()
+    finally:
+        close_whatsapp_session(session)
 
     return results
 

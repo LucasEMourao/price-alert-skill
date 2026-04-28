@@ -12,13 +12,14 @@ from typing import Any
 
 from config import configure_utf8_stdio, resolve_whatsapp_group
 from deal_queue import (
-    enqueue_or_update_normal,
-    enqueue_urgent_retry,
+    begin_scan_run,
     load_deal_queue,
-    mark_scan_run,
+    prune_expired_entries,
+    remove_entry_by_product_key,
     save_deal_queue,
+    upsert_pool_deal,
 )
-from deal_selection import get_queries, prepare_deal_for_selection, qualifies_normal
+from deal_selection import get_queries, prepare_deal_for_selection
 from fetch_amazon_br import run as run_amazon
 from fetch_ml_browser import run as run_mercadolivre_browser
 from generate_melila_links import generate_links
@@ -178,6 +179,7 @@ def build_messages_payload(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "image_url": deal.get("image_url"),
                 "message": message,
                 "category": deal.get("category"),
+                "lane": deal.get("lane"),
                 "is_super_promo": deal.get("is_super_promo", False),
                 "savings_brl": deal.get("savings_brl"),
                 "offer_key": deal.get("offer_key"),
@@ -262,24 +264,46 @@ def handle_cadence_scan(
     args: argparse.Namespace,
     now: datetime,
 ) -> None:
-    """Run the cadence-v1 scan path: queue normals and send super promos."""
+    """Collect deals into expiring pools for the single-sender flow."""
     sent_data = load_sent_deals()
     queue = load_deal_queue()
+    scan_sequence = begin_scan_run(queue, now)
     eligible_deals = []
     skipped_sent = 0
-    skipped_unqualified = 0
+    discarded = 0
+    lane_counts = {"urgent": 0, "priority": 0, "normal": 0}
 
     for deal in deals:
-        if not qualifies_normal(deal) and not deal.get("is_super_promo"):
-            skipped_unqualified += 1
+        lane = deal.get("lane", "discarded")
+        if lane == "discarded":
+            remove_entry_by_product_key(queue, deal.get("product_key", ""))
+            discarded += 1
             continue
         if not can_send_again(deal, sent_data, now=now):
+            remove_entry_by_product_key(queue, deal.get("product_key", ""))
             skipped_sent += 1
             continue
+
+        deal["message"] = deal.get("message") or format_deal_message(deal)
+        deal["dedup_key"] = deal.get("dedup_key") or deal.get("offer_key") or deal["url"]
+        upsert_pool_deal(
+            queue,
+            deal,
+            lane,
+            now=now,
+            scan_sequence=scan_sequence,
+        )
+        lane_counts[lane] += 1
         eligible_deals.append(deal)
 
-    if skipped_unqualified:
-        print(f"Skipped {skipped_unqualified} deals outside category thresholds")
+    if args.send_whatsapp:
+        print(
+            "  NOTE: scan-only no longer sends to WhatsApp directly. "
+            "Use sender_worker.py to process the pools."
+        )
+
+    if discarded:
+        print(f"Skipped {discarded} deals outside the lane thresholds")
     if skipped_sent:
         print(f"Skipped {skipped_sent} deals blocked by cooldown/dedup")
 
@@ -287,44 +311,15 @@ def handle_cadence_scan(
     output_path = save_messages_file(messages, now, args.output)
     if output_path:
         print(f"Saved to: {output_path}")
-        print_messages(messages)
-
-    normal_deals = [deal for deal in eligible_deals if not deal.get("is_super_promo")]
-    super_deals = [deal for deal in eligible_deals if deal.get("is_super_promo")]
-
-    for deal in normal_deals:
-        enqueue_or_update_normal(queue, deal, now)
-
-    group = resolve_whatsapp_group(args.whatsapp_group)
-    if super_deals and args.send_whatsapp:
-        results = _send_whatsapp_deals(
-            parser,
-            super_deals,
-            group,
-            headed=args.headed,
-            reset_session=args.reset_whatsapp_session,
-        )
-        print(f"\nImmediate super-promo results: {results['sent']} sent, {results['failed']} failed")
-
-        successful_keys = set(results.get("successful_keys", []))
-        if successful_keys:
-            successful_deals = [
-                deal for deal in super_deals
-                if deal["offer_key"] in successful_keys
-            ]
-            mark_deals_as_sent(successful_deals, sent_data=sent_data, auto_save=True)
-
-        for deal in super_deals:
-            if deal["offer_key"] not in successful_keys:
-                enqueue_urgent_retry(queue, deal, now)
-    else:
-        for deal in super_deals:
-            enqueue_urgent_retry(queue, deal, now)
-
-    mark_scan_run(queue, now)
+    queue = prune_expired_entries(queue, now=now)
     save_deal_queue(queue)
 
-    print(f"\nCadence scan summary: {len(normal_deals)} queued normal, {len(super_deals)} super promo")
+    print(
+        "\nCadence scan summary: "
+        f"{lane_counts['urgent']} urgent, "
+        f"{lane_counts['priority']} priority, "
+        f"{lane_counts['normal']} normal"
+    )
 
 
 def handle_legacy_flow(
@@ -389,7 +384,7 @@ def main() -> None:
     parser.add_argument(
         "--scan-only",
         action="store_true",
-        help="Cadence mode: enqueue normal deals and send super promos immediately",
+        help="Cadence mode: collect deals into expiring pools for the single sender",
     )
     parser.add_argument("--max-results", type=int, default=15, help="Max results per marketplace/query")
     parser.add_argument("--min-discount", type=float, default=10.0, help="Minimum discount %% to include")

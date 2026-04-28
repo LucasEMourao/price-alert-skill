@@ -119,3 +119,48 @@ class TestScanDealsWhatsappGroup:
         assert saved_payload["auto_save"] is True
         assert len(saved_payload["deals"]) == 1
         assert saved_payload["deals"][0]["dedup_key"] == "deal-1"
+
+    @patch("send_to_whatsapp.send_deals_to_whatsapp")
+    def test_scan_only_does_not_send_whatsapp_anymore(self, mock_send, monkeypatch, tmp_path):
+        deal = _sample_deal()
+        deal["current_price"] = 100.0
+        deal["current_price_text"] = "R$ 100,00"
+        deal["previous_price"] = 200.0
+        deal["previous_price_text"] = "R$ 200,00"
+        deal["discount_pct"] = 50.0
+
+        monkeypatch.setattr(config, "WHATSAPP_GROUP", "Grupo via Env")
+        monkeypatch.setattr(scan_deals, "scan_all", lambda *args, **kwargs: [deal])
+        monkeypatch.setattr(scan_deals, "apply_affiliate_links", lambda deals: None)
+        monkeypatch.setattr(scan_deals, "load_sent_deals", lambda: {"sent": {}, "last_cleaned": None})
+        monkeypatch.setattr(
+            scan_deals,
+            "load_deal_queue",
+            lambda: {
+                "urgent_pool": [],
+                "priority_pool": [],
+                "normal_pool": [],
+                "meta": {"last_scan_at": None, "last_sender_tick_at": None, "scan_sequence": 0},
+            },
+        )
+        saved_queue = {}
+        monkeypatch.setattr(scan_deals, "save_deal_queue", lambda queue: saved_queue.update(queue))
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "scan_deals.py",
+                "--all",
+                "--scan-only",
+                "--send-whatsapp",
+                "--output",
+                str(tmp_path / "deals.json"),
+            ],
+        )
+
+        scan_deals.main()
+
+        assert mock_send.called is False
+        assert saved_queue["normal_pool"] or saved_queue["priority_pool"] or saved_queue["urgent_pool"]
+        pooled = saved_queue["normal_pool"] or saved_queue["priority_pool"] or saved_queue["urgent_pool"]
+        assert pooled[0]["message"]
