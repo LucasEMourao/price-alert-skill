@@ -14,6 +14,7 @@ from core.adapters.amazon_scanner import AmazonMarketplaceScanner
 from core.adapters.meli_affiliate_links import MeliAffiliateLinkGenerator
 from core.adapters.mercadolivre_scanner import MercadoLivreMarketplaceScanner
 from core.adapters.whatsapp_sender import WhatsAppBatchSender
+from core.entrypoints.scan_cli import main as run_scan_cli
 from core.application.scan_use_case import (
     apply_affiliate_links as application_apply_affiliate_links,
     build_messages_payload as application_build_messages_payload,
@@ -244,58 +245,18 @@ def handle_legacy_flow(
 
 
 def main() -> None:
-    configure_utf8_stdio()
-    parser = argparse.ArgumentParser(
-        description="Scan marketplaces for products with displayed discounts."
+    run_scan_cli(
+        configure_utf8_stdio_fn=configure_utf8_stdio,
+        get_queries_fn=get_queries,
+        scan_all_fn=scan_all,
+        deduplicate_run_deals_fn=deduplicate_run_deals,
+        prepare_deal_for_selection_fn=prepare_deal_for_selection,
+        apply_affiliate_links_fn=apply_affiliate_links,
+        handle_cadence_scan_fn=handle_cadence_scan,
+        handle_legacy_flow_fn=handle_legacy_flow,
+        logger=print,
+        now_fn=lambda: datetime.now(timezone.utc),
     )
-    parser.add_argument("query", nargs="?", help="Search query (omit if using --all)")
-    parser.add_argument("--all", action="store_true", help="Scan the configured hardware/peripheral categories")
-    parser.add_argument(
-        "--scan-only",
-        action="store_true",
-        help="Cadence mode: collect deals into expiring pools for the single sender",
-    )
-    parser.add_argument("--max-results", type=int, default=15, help="Max results per marketplace/query")
-    parser.add_argument("--min-discount", type=float, default=10.0, help="Minimum discount %% to include")
-    parser.add_argument("--marketplaces", default="amazon_br,mercadolivre_br", help="Comma-separated marketplaces")
-    parser.add_argument("--output", help="Path to save messages JSON")
-    parser.add_argument("--send-whatsapp", action="store_true", help="Send deals to WhatsApp after scanning")
-    parser.add_argument(
-        "--whatsapp-group",
-        default="",
-        help="WhatsApp group name (defaults to WHATSAPP_GROUP from .env)",
-    )
-    parser.add_argument(
-        "--headed",
-        action="store_true",
-        help="Open browser window for WhatsApp (needed for first-time QR scan)",
-    )
-    parser.add_argument(
-        "--reset-whatsapp-session",
-        action="store_true",
-        help="Delete the persisted WhatsApp Web session before opening the browser",
-    )
-    args = parser.parse_args()
-
-    if not args.query and not args.all:
-        parser.error("Provide a query or use --all")
-
-    marketplaces = [m.strip() for m in args.marketplaces.split(",")]
-    queries = get_queries() if args.all else [args.query]
-
-    now = datetime.now(timezone.utc)
-    print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Scanning for deals (min {args.min_discount}% off)...\n")
-
-    scanned_deals = scan_all(args.max_results, args.min_discount, marketplaces, queries)
-    unique_deals = deduplicate_run_deals(scanned_deals)
-    prepared_deals = [prepare_deal_for_selection(deal) for deal in unique_deals]
-    apply_affiliate_links(prepared_deals)
-
-    if args.scan_only:
-        handle_cadence_scan(parser, prepared_deals, args, now)
-        return
-
-    handle_legacy_flow(parser, prepared_deals, args, now)
 
 
 if __name__ == "__main__":

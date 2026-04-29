@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import argparse
 import os
 import time
 from datetime import datetime, timezone
@@ -17,6 +16,7 @@ from core.adapters.whatsapp_sender import (
     WhatsAppSessionCloserAdapter,
     WhatsAppSessionOpenerAdapter,
 )
+from core.entrypoints.sender_cli import main as run_sender_cli
 from core.application.sender_use_case import (
     run_sender_loop as application_run_sender_loop,
     select_next_deal as application_select_next_deal,
@@ -192,69 +192,14 @@ def run_sender(
 
 
 def main() -> None:
-    configure_utf8_stdio()
-    parser = argparse.ArgumentParser(
-        description="Run the single serial WhatsApp sender for queued deals."
+    run_sender_cli(
+        configure_utf8_stdio_fn=configure_utf8_stdio,
+        resolve_whatsapp_group_fn=resolve_whatsapp_group,
+        run_sender_fn=run_sender,
+        default_poll_seconds=int(CADENCE_CONFIG["sender_poll_seconds"]),
+        logger=print,
+        now_fn=_utc_now,
     )
-    parser.add_argument(
-        "--group",
-        default="",
-        help="Name of the WhatsApp group to send to (defaults to WHATSAPP_GROUP from .env)",
-    )
-    parser.add_argument(
-        "--headed",
-        action="store_true",
-        help="Open the browser window instead of using headless mode.",
-    )
-    parser.add_argument(
-        "--reset-session",
-        action="store_true",
-        help="Delete the persisted WhatsApp Web session before opening the browser.",
-    )
-    parser.add_argument(
-        "--continuous",
-        action="store_true",
-        help="Keep polling for new deals instead of processing a single run.",
-    )
-    parser.add_argument(
-        "--poll-seconds",
-        type=int,
-        default=CADENCE_CONFIG["sender_poll_seconds"],
-        help="Seconds to wait between idle polls in continuous mode.",
-    )
-    parser.add_argument(
-        "--max-messages",
-        type=int,
-        help="Optional cap on how many deals this invocation should process.",
-    )
-    parser.add_argument(
-        "--idle-exit-seconds",
-        type=int,
-        help="Optional idle timeout for continuous mode. If omitted, the worker keeps polling.",
-    )
-    args = parser.parse_args()
-
-    group_name = resolve_whatsapp_group(args.group)
-    if not group_name:
-        parser.error("Provide --group or set WHATSAPP_GROUP in .env")
-
-    now = _utc_now()
-    print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Starting sender worker...\n")
-
-    results = run_sender(
-        group_name=group_name,
-        headed=args.headed,
-        reset_session=args.reset_session,
-        continuous=args.continuous,
-        poll_seconds=args.poll_seconds,
-        max_messages=args.max_messages,
-        idle_exit_seconds=args.idle_exit_seconds,
-    )
-
-    print(f"\nResults: {results['sent']} sent, {results['failed']} failed")
-    if results["errors"]:
-        for err in results["errors"]:
-            print(f"  - {err['title']}: {err['reason']}")
 
 
 if __name__ == "__main__":
