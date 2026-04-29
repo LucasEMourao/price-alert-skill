@@ -7,12 +7,15 @@ from __future__ import annotations
 import argparse
 import os
 import time
-import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from config import configure_utf8_stdio, resolve_whatsapp_group
+from core.application.sender_use_case import (
+    run_sender_loop as application_run_sender_loop,
+    select_next_deal as application_select_next_deal,
+)
 from deal_queue import (
     get_sendable_entries,
     load_deal_queue,
@@ -117,24 +120,14 @@ def _select_next_deal(
     non_urgent_index: int,
     now: datetime | None = None,
 ) -> tuple[dict[str, Any] | None, int]:
-    urgent_entries = sort_deals_for_sending(
-        get_sendable_entries(queue, "urgent", now=now)
+    return application_select_next_deal(
+        queue,
+        non_urgent_index=non_urgent_index,
+        now=now,
+        get_sendable_entries_fn=get_sendable_entries,
+        sort_deals_for_sending_fn=sort_deals_for_sending,
+        non_urgent_lane_sequence=tuple(CADENCE_CONFIG["non_urgent_lane_sequence"]),
     )
-    if urgent_entries:
-        return urgent_entries[0], non_urgent_index
-
-    sequence = tuple(CADENCE_CONFIG["non_urgent_lane_sequence"])
-    sequence_length = len(sequence)
-    for offset in range(sequence_length):
-        lane = sequence[(non_urgent_index + offset) % sequence_length]
-        lane_entries = sort_deals_for_sending(
-            get_sendable_entries(queue, lane, now=now)
-        )
-        if lane_entries:
-            next_index = (non_urgent_index + offset + 1) % sequence_length
-            return lane_entries[0], next_index
-
-    return None, non_urgent_index
 
 
 def run_sender(
@@ -160,99 +153,35 @@ def run_sender(
         else None
     )
 
-    results = {"sent": 0, "failed": 0, "errors": [], "skipped_due_to_lock": False}
-    session = None
-    idle_started_at = time.time()
-    non_urgent_index = 0
-
     try:
-        while True:
-            if _stop_requested():
-                print("Sender stop requested. Shutting down gracefully.")
-                break
-
-            now = _utc_now()
-            queue = prune_expired_entries(load_deal_queue(), now=now)
-            deal, non_urgent_index = _select_next_deal(
-                queue,
-                non_urgent_index=non_urgent_index,
-                now=now,
-            )
-
-            if not deal:
-                mark_sender_tick(queue, now)
-                save_deal_queue(queue)
-
-                if not continuous:
-                    break
-
-                if _stop_requested():
-                    print("Sender stop requested while idle. Stopping.")
-                    break
-
-                if idle_exit_seconds and (time.time() - idle_started_at) >= idle_exit_seconds:
-                    print("Sender worker idle timeout reached. Stopping.")
-                    break
-
-                time.sleep(poll_seconds)
-                continue
-
-            idle_started_at = time.time()
-            if session is None:
-                try:
-                    session = open_whatsapp_session(
-                        group_name=group_name,
-                        headed=headed,
-                        reset_session=reset_session,
-                    )
-                except Exception as exc:
-                    print(f"  WARNING: Failed to open WhatsApp session: {exc}")
-                    traceback.print_exc()
-                    if not continuous:
-                        raise
-                    time.sleep(poll_seconds)
-                    continue
-
-            print(
-                f"\nSending next {deal.get('lane', 'normal')} deal: "
-                f"{deal.get('title', '')[:60]}..."
-            )
-            attempt_result = send_deal_in_open_chat(
-                session["page"],
-                deal,
-                delay_between=5.0,
-                max_retries=2,
-            )
-
-            refreshed_queue = prune_expired_entries(load_deal_queue(), now=_utc_now())
-            if attempt_result["success"]:
-                remove_entry_by_offer_key(refreshed_queue, deal["offer_key"])
-                sent_data = load_sent_deals()
-                mark_deals_as_sent([deal], sent_data=sent_data, auto_save=True)
-                results["sent"] += 1
-            else:
-                mark_deal_failed(refreshed_queue, deal["offer_key"], now=_utc_now())
-                results["failed"] += 1
-                results["errors"].append(
-                    {
-                        "title": attempt_result["title"],
-                        "url": attempt_result["url"],
-                        "reason": attempt_result["reason"],
-                    }
-                )
-
-            mark_sender_tick(refreshed_queue, _utc_now())
-            save_deal_queue(refreshed_queue)
-
-            if max_messages is not None and results["sent"] + results["failed"] >= max_messages:
-                break
-
-            if not continuous:
-                continue
-
-        return results
+        return application_run_sender_loop(
+            group_name=group_name,
+            headed=headed,
+            reset_session=reset_session,
+            continuous=continuous,
+            poll_seconds=poll_seconds,
+            max_messages=max_messages,
+            idle_exit_seconds=idle_exit_seconds,
+            stop_requested_fn=_stop_requested,
+            now_fn=_utc_now,
+            load_deal_queue_fn=load_deal_queue,
+            prune_expired_entries_fn=prune_expired_entries,
+            mark_sender_tick_fn=mark_sender_tick,
+            save_deal_queue_fn=save_deal_queue,
+            get_sendable_entries_fn=get_sendable_entries,
+            sort_deals_for_sending_fn=sort_deals_for_sending,
+            non_urgent_lane_sequence=tuple(CADENCE_CONFIG["non_urgent_lane_sequence"]),
+            open_whatsapp_session_fn=open_whatsapp_session,
+            send_deal_in_open_chat_fn=send_deal_in_open_chat,
+            close_whatsapp_session_fn=close_whatsapp_session,
+            load_sent_deals_fn=load_sent_deals,
+            mark_deals_as_sent_fn=mark_deals_as_sent,
+            remove_entry_by_offer_key_fn=remove_entry_by_offer_key,
+            mark_deal_failed_fn=mark_deal_failed,
+            sleep_fn=time.sleep,
+            logger=print,
+        )
     finally:
-        close_whatsapp_session(session)
         _release_sender_lock(lock_fd)
 
 
