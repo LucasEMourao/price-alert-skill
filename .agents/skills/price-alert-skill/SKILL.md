@@ -1,121 +1,156 @@
 ---
 name: price-alert-monitor
-description: Busque ofertas na Amazon BR e no Mercado Livre, gere links de afiliado e monte mensagens prontas para WhatsApp.
+description: Busque ofertas na Amazon BR e no Mercado Livre, gere links de afiliado e alimente um fluxo de envio serial para WhatsApp.
 ---
 
 # Price Alert Monitor
 
-Skill para busca sob demanda de ofertas em marketplaces brasileiros.
+Skill para busca sob demanda de ofertas em marketplaces brasileiros com automacao de envio para WhatsApp.
 
 ## O que a skill faz
 
 - Busca ofertas na Amazon BR e no Mercado Livre
-- Extrai preço atual e preço anterior exibido pelo marketplace
-- Filtra ofertas por desconto mínimo
-- Gera links de afiliado para Amazon BR e links `meli.la` para Mercado Livre
-- Formata mensagens prontas para WhatsApp
-- Pode enviar automaticamente as ofertas pelo WhatsApp Web
+- Extrai preco atual e preco anterior exibido pelo marketplace
+- Filtra por desconto minimo
+- Gera links de afiliado da Amazon BR e links `meli.la` do Mercado Livre
+- Classifica cada oferta em `urgent`, `priority`, `normal` ou `discarded`
+- Alimenta uma fila expirável
+- Envia mensagens para WhatsApp em fluxo serial
 
 ## Fluxo atual
 
-1. Instale as dependências Python e o Chromium do Playwright.
+1. Instale as dependencias Python e o Chromium do Playwright.
 2. Configure o `.env`.
-3. Na primeira vez, faça o login manual do Mercado Livre com `python3 scripts/generate_melila_links.py --login`.
-4. Se for usar envio automático, faça o login inicial do WhatsApp com `python3 scripts/scan_deals.py --all --send-whatsapp --headed`.
-5. Rode `scripts/scan_deals.py` com uma query específica ou com `--all`.
-6. As mensagens são exibidas no terminal e salvas em `data/messages/deals_*.json`.
-7. Quando `--send-whatsapp` for usado, o grupo padrão vem de `WHATSAPP_GROUP` no `.env`; `--whatsapp-group` continua disponível como sobrescrita manual.
+3. Na primeira vez, faca o login manual do Mercado Livre com `python3 scripts/generate_melila_links.py --login`.
+4. Na primeira vez, faca o login inicial do WhatsApp com `python3 scripts/sender_worker.py --continuous --headed`.
+5. Rode `scripts/scan_deals.py` com `--scan-only`.
+6. Deixe `scripts/sender_worker.py --continuous` consumindo a fila.
+7. As mensagens saem com imagem + legenda + link.
 
 ## Scripts principais
 
-- `scripts/scan_deals.py` — fluxo principal de busca, filtro, deduplicação, geração de mensagens e envio opcional para WhatsApp
-- `scripts/fetch_amazon_br.py` — scraping da Amazon BR com Playwright e geração de link afiliado
-- `scripts/fetch_ml_browser.py` — scraping do Mercado Livre com Playwright e extração via DOM renderizado
-- `scripts/generate_melila_links.py` — geração de links `meli.la` via painel de afiliados do Mercado Livre
-- `scripts/send_to_whatsapp.py` — envio automático de imagem + legenda no WhatsApp Web
-- `scripts/utils.py` — utilitários compartilhados de desconto, deduplicação e formatação
-- `scripts/config.py` — leitura do `.env` e resolução de configurações compartilhadas
-- `scripts/scrape_server.py` — legado, mantido apenas para referência; não faz parte do fluxo atual
-- `scripts/fetch_mercadolivre_br.py` — parser legado do Mercado Livre; não é o caminho principal
+- `scripts/scan_deals.py` - scan, classificacao e populacao dos pools
+- `scripts/deal_selection.py` - queries, categorias, thresholds e prioridades
+- `scripts/deal_queue.py` - pools expiráveis e metadata da cadencia
+- `scripts/sender_worker.py` - sender unico e serial do WhatsApp
+- `scripts/dispatch_pending_deals.py` - drenagem pontual de poucas mensagens
+- `scripts/fetch_amazon_br.py` - scraping da Amazon BR
+- `scripts/fetch_ml_browser.py` - scraping do Mercado Livre
+- `scripts/generate_melila_links.py` - geracao de `meli.la`
+- `scripts/send_to_whatsapp.py` - automacao do WhatsApp Web
+- `scripts/utils.py` - utilitarios de formatacao, cooldown e persistencia
+- `scripts/config.py` - leitura do `.env`
 
-## Variáveis de ambiente
+## Variaveis de ambiente
 
-- `AMAZON_AFFILIATE_TAG` — tag usada nos links afiliados da Amazon BR
-- `WHATSAPP_GROUP` — grupo padrão usado por `scan_deals.py` e `send_to_whatsapp.py`
-- `ML_PROXY` — proxy opcional para cenários em que o painel de afiliados do Mercado Livre bloquear o IP
-- `ML_AFFILIATE_EMAIL` e `ML_AFFILIATE_PASSWORD` — mantidas no `.env.example` para referência, embora o login atual seja manual no navegador
+- `AMAZON_AFFILIATE_TAG` - tag da Amazon BR
+- `WHATSAPP_GROUP` - grupo padrao de envio
+- `ML_PROXY` - proxy opcional
+- `ML_AFFILIATE_EMAIL` e `ML_AFFILIATE_PASSWORD` - mantidas para referencia do fluxo de afiliados
 
-## Instalação
+## Instalacao
 
 ```bash
 pip install -r requirements.txt
 playwright install chromium
-sudo apt install -y libnspr4 libnss3  # se o Ubuntu/WSL pedir libs extras do Chromium
 ```
 
-## Comandos úteis
+## Comandos uteis
 
 ```bash
-# Login manual no Mercado Livre afiliados
+# Login no Mercado Livre afiliados
 python3 scripts/generate_melila_links.py --login
 
-# Buscar uma categoria
-python3 scripts/scan_deals.py "mouse gamer" --min-discount 10
+# Scan de uma categoria
+python3 scripts/scan_deals.py "monitor gamer" --min-discount 10 --max-results 4 --scan-only
 
-# Buscar todas as categorias monitoradas
-python3 scripts/scan_deals.py --all --min-discount 10
+# Scan completo da cadencia
+python3 scripts/scan_deals.py --all --scan-only --min-discount 10 --max-results 8
 
-# Enviar usando o grupo padrão do .env
-python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp
+# Sender continuo
+python3 scripts/sender_worker.py --continuous
 
-# Sobrescrever o grupo do .env apenas nesta execução
-python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp --whatsapp-group "Grupo de Teste"
+# Sender continuo com navegador visivel
+python3 scripts/sender_worker.py --continuous --headed
 
-# Login inicial do WhatsApp via QR code
-python3 scripts/scan_deals.py --all --min-discount 10 --send-whatsapp --headed
-
-# Usar o sender diretamente com o grupo do .env
-python3 scripts/send_to_whatsapp.py --deals data/messages/deals_YYYYMMDD_HHMMSS.json
+# Drenagem pontual
+python3 scripts/dispatch_pending_deals.py --max-messages 4
 ```
 
 ## Categorias monitoradas por `--all`
 
 - `mouse gamer`
 - `teclado mecanico gamer`
-- `headset gamer`
-- `monitor gamer`
-- `ssd 2tb`
-- `memoria ram ddr5`
-- `placa de video rtx`
-- `notebook gamer`
-- `gabinete gamer`
-- `fonte gamer`
-- `cooler gamer`
 - `mousepad gamer`
+- `headset gamer`
+- `webcam full hd`
+- `microfone usb`
+- `air cooler`
+- `ssd nvme 1tb`
+- `ssd nvme 2tb`
+- `ssd sata 1tb`
+- `ssd 2tb`
+- `memoria ram ddr4`
+- `memoria ram ddr5`
+- `fonte 650w`
+- `fonte 750w`
+- `gabinete gamer`
+- `water cooler`
+- `monitor gamer`
+- `processador ryzen`
+- `processador intel core`
+- `placa mae am5`
+- `placa mae lga1700`
+- `placa de video rtx`
+- `placa de video rx`
+- `notebook gamer`
+- `pc gamer`
+- `computador gamer`
+- `desktop gamer`
 
 ## Formato da mensagem
 
 ```text
-{emoji} OFERTA DO DIA 👇
+{emoji} OFERTA DO DIA
 
 {emoji} {NOME_DO_PRODUTO}
 
-🔥 {PERCENTUAL}% OFF
-💰 Antes: ~R$ {PRECO_ANTERIOR}~
-🎯 Hoje: R$ {PRECO_ATUAL}
+{PERCENTUAL}% OFF
+Antes: ~R$ {PRECO_ANTERIOR}~
+Hoje: R$ {PRECO_ATUAL}
 
-🛍️ Comprar aqui:
+Comprar aqui:
 {LINK}
 
-💸 Valores podem variar. Se entrar em estoque baixo, some rápido.
+Valores podem variar. Se entrar em estoque baixo, some rapido.
 ```
 
-Quando não houver preço anterior exibido, a mensagem sai apenas com a linha `🎯 Hoje`.
+## Observacoes operacionais
 
-## Observações operacionais
+- O sender e unico. Nao rode varios senders em paralelo.
+- O scan nao envia diretamente no fluxo principal.
+- O sender roda melhor como processo continuo no Windows.
+- A deduplicacao nao usa so o titulo; ela considera produto e oferta.
+- A fila fica em `data/deal_queue.json`.
+- O historico de cooldown fica em `data/sent_deals.json`.
 
-- A deduplicação entre execuções usa `data/sent_deals.json`.
-- O cache de links `meli.la` usa `data/melila_cache.json`.
-- A sessão do Mercado Livre fica em `data/ml_session.json`.
-- A sessão do WhatsApp Web fica em `data/whatsapp_session/`.
-- O fluxo depende da estrutura atual dos marketplaces e do WhatsApp Web; mudanças de seletor podem exigir manutenção.
+## Automacao Windows
+
+Tarefas esperadas:
+
+- `PriceAlert Sender Worker`
+- `PriceAlert Scan 15m`
+- `PriceAlert Sender Stop`
+
+Launchers locais:
+
+- `C:\Users\bruno\PriceAlertTasks\sender.ps1`
+- `C:\Users\bruno\PriceAlertTasks\scan.ps1`
+- `C:\Users\bruno\PriceAlertTasks\stop.ps1`
+
+## Melhorias futuras registradas
+
+- shutdown mais gracioso no fim da janela de envio
+- melhor resumo operacional nos logs
+- utilitario unico de diagnostico
+- documentacao de reinstalacao das tasks e launchers curtos
