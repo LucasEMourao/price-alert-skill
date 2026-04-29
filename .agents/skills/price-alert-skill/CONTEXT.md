@@ -2,11 +2,11 @@
 
 ## Resumo
 
-`price-alert-skill` e um pipeline de scraping para marketplaces brasileiros com entrega automatizada em WhatsApp.
+`price-alert-skill` e um pipeline de discovery de ofertas para marketplaces brasileiros com entrega automatizada em WhatsApp.
 
-O fluxo atual nao envia do scan diretamente. Ele trabalha em duas etapas:
+O fluxo principal vigente trabalha em duas etapas:
 
-1. `scripts/scan_deals.py --scan-only` busca ofertas, classifica e alimenta pools expiráveis.
+1. `scripts/scan_deals.py --scan-only` faz a coleta, classifica as ofertas e atualiza os pools expiráveis.
 2. `scripts/sender_worker.py --continuous` e o unico processo que consome a fila e envia uma mensagem por vez para o WhatsApp Web.
 
 O formato de envio mantido hoje e:
@@ -15,22 +15,120 @@ O formato de envio mantido hoje e:
 - legenda
 - link de afiliado
 
+## Arquitetura atual
+
+A arquitetura foi refatorada para separar regra de negocio, casos de uso e integracoes concretas.
+
+### 1. Dominio puro
+
+Local: `core/domain/`
+
+Responsabilidades:
+- entidades e tipos de negocio
+- classificacao de lane
+- `product_key` e `offer_key`
+- ranking e ordenacao
+- cooldown, dedup e politica de reenvio
+- expiracao e selecao de fila
+
+Arquivos principais:
+- `models.py`
+- `types.py`
+- `lane_rules.py`
+- `identity.py`
+- `ranking.py`
+- `dedup_policy.py`
+- `queue_policy.py`
+
+### 2. Aplicacao
+
+Local: `core/application/`
+
+Responsabilidades:
+- orquestrar o fluxo de scan
+- orquestrar o fluxo do sender
+- coordenar dominio + repositorios + adaptadores
+
+Arquivos principais:
+- `scan_use_case.py`
+- `sender_use_case.py`
+
+### 3. Ports
+
+Local: `core/ports/`
+
+Responsabilidades:
+- definir contratos para persistencia, scan, afiliado, relogio e envio
+
+Arquivos principais:
+- `queue_repository.py`
+- `sent_deals_repository.py`
+- `scanner.py`
+- `affiliate_links.py`
+- `message_sender.py`
+- `clock.py`
+
+### 4. Adapters
+
+Local: `core/adapters/`
+
+Responsabilidades:
+- implementar os ports com tecnologia concreta
+- encapsular JSON, Playwright e automacao externa
+
+Arquivos principais:
+- `json_queue_repository.py`
+- `json_sent_deals_repository.py`
+- `amazon_scanner.py`
+- `mercadolivre_scanner.py`
+- `meli_affiliate_links.py`
+- `whatsapp_sender.py`
+
+### 5. Entrypoints
+
+Local: `core/entrypoints/`
+
+Responsabilidades:
+- montar dependencias
+- expor CLI fina sobre application + adapters
+
+Arquivos principais:
+- `scan_cli.py`
+- `sender_cli.py`
+- `dispatch_cli.py`
+
+### 6. Scripts legados como compatibilidade
+
+Local: `scripts/`
+
+Os scripts historicos continuam existindo, mas agora devem ser tratados como cascas finas e pontos de compatibilidade operacional.
+
+Arquivos principais:
+- `scan_deals.py`
+- `sender_worker.py`
+- `dispatch_pending_deals.py`
+
+Eles delegam para a arquitetura nova e preservam:
+- comandos ja usados
+- wrappers PowerShell
+- tarefas do Windows
+
 ## Fluxo vigente
 
-1. `scripts/scan_deals.py` faz a busca nas queries monitoradas.
-2. Amazon BR e coletada por `scripts/fetch_amazon_br.py`.
-3. Mercado Livre e coletado por `scripts/fetch_ml_browser.py`.
-4. Links do Mercado Livre viram `meli.la` via `scripts/generate_melila_links.py`.
-5. Cada oferta e normalizada por `scripts/deal_selection.py`.
-6. As ofertas entram nas trilhas `urgent`, `priority`, `normal` ou `discarded`.
-7. Os pools expiráveis sao persistidos por `scripts/deal_queue.py` em `data/deal_queue.json`.
-8. `scripts/sender_worker.py` abre uma unica sessao do WhatsApp e envia em serie.
-9. O historico de envio e controlado por `data/sent_deals.json`.
+1. `scripts/scan_deals.py` dispara o scan pelo entrypoint atual.
+2. Os scanners concretos da Amazon BR e do Mercado Livre rodam pelos adapters.
+3. Links do Mercado Livre podem virar `meli.la` pelo adapter de afiliado.
+4. O dominio classifica cada oferta em `urgent`, `priority`, `normal` ou `discarded`.
+5. O repositorio JSON atualiza `data/deal_queue.json`.
+6. `scripts/sender_worker.py` sobe o sender continuo.
+7. O sender escolhe a proxima oferta pela politica de fila.
+8. O adapter de WhatsApp envia a mensagem.
+9. O historico de envio e persistido em `data/sent_deals.json`.
 
 ## Como a cadencia funciona
 
 - `urgent`
-  Entra na frente da fila e pode ser reenviada com cooldown mais curto.
+  Entra na frente da fila e usa cooldown menor.
 
 - `priority`
   Entra na fila principal depois de `urgent`.
@@ -41,7 +139,7 @@ O formato de envio mantido hoje e:
 - `discarded`
   Nao entra na fila porque ficou abaixo das regras atuais.
 
-O sender usa uma sequencia nao urgente `priority, priority, priority, normal`, preservando foco nas melhores oportunidades sem abandonar o restante.
+O sender usa a sequencia nao urgente `priority, priority, priority, normal`, preservando foco nas melhores oportunidades sem abandonar o restante.
 
 ## Estrutura relevante
 
@@ -50,77 +148,72 @@ O sender usa uma sequencia nao urgente `priority, priority, priority, normal`, p
 |-- SKILL.md
 |-- CONTEXT.md
 |-- PLANO.md
-|-- .env.example
 |-- run_scan.ps1
 |-- run_sender.ps1
 |-- stop_sender.ps1
+|-- core/
+|   |-- domain/
+|   |-- application/
+|   |-- ports/
+|   |-- adapters/
+|   `-- entrypoints/
 |-- data/
 |   |-- deal_queue.json
 |   |-- sent_deals.json
 |   |-- melila_cache.json
 |   |-- ml_session.json
-|   |-- messages/
+|   `-- messages/
 |-- logs/
 |-- references/
 `-- scripts/
-    |-- config.py
     |-- deal_queue.py
     |-- deal_selection.py
     |-- dispatch_pending_deals.py
-    |-- fetch_amazon_br.py
-    |-- fetch_ml_browser.py
-    |-- generate_melila_links.py
     |-- scan_deals.py
     |-- send_to_whatsapp.py
     |-- sender_worker.py
-    |-- utils.py
     `-- tests/
 ```
 
 ## Componentes ativos
 
+- `core/domain/*`
+  Regra de negocio pura.
+
+- `core/application/*`
+  Casos de uso de scan e sender.
+
+- `core/ports/*`
+  Contratos para desacoplamento.
+
+- `core/adapters/*`
+  Integracoes concretas com JSON, Playwright e afiliado.
+
+- `core/entrypoints/*`
+  CLI fina da arquitetura atual.
+
 - `scripts/scan_deals.py`
-  Faz o scan, calcula desconto, aplica affiliate link, classifica por lane e atualiza os pools.
-
-- `scripts/deal_selection.py`
-  Define queries, categorias, regras de corte e prioridades.
-
-- `scripts/deal_queue.py`
-  Mantem os pools `urgent`, `priority` e `normal`, com expiracao e refresh por novos scans.
+  Compatibilidade de CLI para scan.
 
 - `scripts/sender_worker.py`
-  Processo unico de envio serial para o WhatsApp.
+  Compatibilidade de CLI para sender continuo.
 
 - `scripts/dispatch_pending_deals.py`
-  Helper one-shot para drenar poucas mensagens e encerrar.
-
-- `scripts/send_to_whatsapp.py`
-  Camada de browser/Playwright para o WhatsApp Web.
-
-- `scripts/generate_melila_links.py`
-  Converte ofertas do Mercado Livre em links `meli.la`.
+  Compatibilidade de CLI para drenagem pontual.
 
 - `run_scan.ps1`
-  Wrapper operacional do scan.
+  Wrapper operacional do scan no Windows.
 
 - `run_sender.ps1`
-  Wrapper operacional do sender continuo.
+  Wrapper operacional do sender continuo no Windows.
 
 - `stop_sender.ps1`
-  Encerra o sender usando o lock `data/sender_worker.lock`.
-
-## Componentes legados ou secundarios
-
-- `scripts/scrape_server.py`
-  Nao faz parte do fluxo principal atual.
-
-- `scripts/fetch_mercadolivre_br.py`
-  Parser legado. O caminho principal hoje e `fetch_ml_browser.py`.
+  Encerramento do sender pelo lock file e sinal de parada.
 
 ## Estado persistido
 
 - `data/deal_queue.json`
-  Pools ativos e metadata do sender/scan.
+  Pools ativos e metadata de scan/sender.
 
 - `data/sent_deals.json`
   Historico usado para cooldown e deduplicacao entre execucoes.
@@ -188,11 +281,13 @@ python3 scripts/dispatch_pending_deals.py --max-messages 4
 - A automacao prioriza estabilidade do WhatsApp acima de throughput maximo.
 - O grupo padrao vem de `WHATSAPP_GROUP` no `.env`.
 - O sender roda oculto no Windows, sem depender de janela visivel.
+- Os scripts antigos foram preservados para compatibilidade operacional.
 
 ## Melhorias futuras registradas
 
-- Encerramento mais gracioso do sender as 23:00 para evitar o ruido final do driver/Node no log.
+- Simplificar a composicao das dependencias em um bootstrap central.
+- Encerramento mais gracioso do sender as 23:00 para reduzir ruido de driver/browser no log.
+- Adicionar healthcheck ou watchdog do sender.
 - Melhor observabilidade no scan com timestamp explicito de fim de rodada.
 - Melhor observabilidade no sender com resumo por hora e total drenado da fila.
-- Comando de diagnostico unico para status de tasks, fila e logs.
-- Opcionalmente mover os launchers de `C:\Users\bruno\PriceAlertTasks\` para um empacotamento mais reproduzivel.
+- Evoluir a persistencia de JSON para algo mais robusto se a concorrencia crescer.

@@ -10,8 +10,14 @@ import os
 import sys
 from pathlib import Path
 
+# Keep the project root importable when legacy scripts are executed directly.
+_project_root = Path(__file__).resolve().parent.parent
+_project_root_str = str(_project_root)
+if _project_root_str not in sys.path:
+    sys.path.insert(0, _project_root_str)
+
 # Load .env file if it exists
-_env_file = Path(__file__).resolve().parent.parent / ".env"
+_env_file = _project_root / ".env"
 if _env_file.exists():
     for line in _env_file.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()

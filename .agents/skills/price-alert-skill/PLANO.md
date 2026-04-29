@@ -12,11 +12,11 @@ Buscar ofertas em marketplaces brasileiros, gerar links de afiliado, alimentar u
 
 O fluxo principal hoje e este:
 
-1. `scripts/scan_deals.py --scan-only` faz a busca e popula a fila.
-2. `scripts/deal_selection.py` classifica as ofertas.
-3. `scripts/deal_queue.py` mantem pools expiráveis.
-4. `scripts/sender_worker.py --continuous` envia uma mensagem por vez para o WhatsApp.
-5. `scripts/send_to_whatsapp.py` cuida da sessao e da entrega no WhatsApp Web.
+1. `scripts/scan_deals.py --scan-only` faz a coleta e popula a fila.
+2. `core/domain/` aplica classificacao, ranking, dedup e politica de fila.
+3. `core/application/` orquestra o scan e o sender.
+4. `core/adapters/` implementa persistencia JSON, scanners, `meli.la` e WhatsApp.
+5. `scripts/sender_worker.py --continuous` envia uma mensagem por vez para o WhatsApp.
 
 Nao e necessario subir servidor auxiliar para esse fluxo.
 
@@ -84,7 +84,70 @@ As tasks chamam launchers locais em:
 - `C:\Users\bruno\PriceAlertTasks\scan.ps1`
 - `C:\Users\bruno\PriceAlertTasks\stop.ps1`
 
-### 7. Monitoracao diaria
+Esses launchers apenas delegam para:
+
+- `run_sender.ps1`
+- `run_scan.ps1`
+- `stop_sender.ps1`
+
+### 7. Camadas da arquitetura
+
+#### Dominio
+
+Local: `core/domain/`
+
+Concentra:
+- lane rules
+- ranking
+- `product_key` e `offer_key`
+- dedup, cooldown e resend policy
+- expiracao e selecao da fila
+
+#### Aplicacao
+
+Local: `core/application/`
+
+Concentra:
+- `scan_use_case.py`
+- `sender_use_case.py`
+
+#### Ports
+
+Local: `core/ports/`
+
+Concentra:
+- contratos para fila
+- contratos para historico de enviados
+- contratos para scanners
+- contratos para afiliado
+- contratos para envio de mensagem
+
+#### Adapters
+
+Local: `core/adapters/`
+
+Concentra:
+- JSON repositories
+- scanners da Amazon e do Mercado Livre
+- geracao de `meli.la`
+- sender de WhatsApp
+
+#### Entrypoints
+
+Local: `core/entrypoints/`
+
+Concentra:
+- CLI de scan
+- CLI de sender
+- CLI de dispatch
+
+#### Compatibilidade legado
+
+Local: `scripts/`
+
+Os scripts antigos continuam existindo, mas agora devem ser tratados como wrappers finos sobre a arquitetura nova.
+
+### 8. Monitoracao diaria
 
 Conferir:
 
@@ -106,6 +169,17 @@ Get-Content ".\logs\sender-YYYY-MM-DD.log" -Tail 50
 Get-Content ".\logs\scan-YYYY-MM-DD.log" -Tail 50
 ```
 
+```powershell
+$q = Get-Content ".\data\deal_queue.json" -Raw | ConvertFrom-Json
+[pscustomobject]@{
+  urgent = @($q.urgent_pool).Count
+  priority = @($q.priority_pool).Count
+  normal = @($q.normal_pool).Count
+  last_scan_at = $q.meta.last_scan_at
+  last_sender_tick_at = $q.meta.last_sender_tick_at
+} | Format-List
+```
+
 ## Arquivos importantes
 
 - `data/deal_queue.json` - pools ativos da cadencia
@@ -120,10 +194,14 @@ Get-Content ".\logs\scan-YYYY-MM-DD.log" -Tail 50
 - enviar direto do scan como fluxo principal
 - rodar varios senders em paralelo
 - depender de servidor auxiliar para scraping
+- alterar os wrappers Windows sempre que a regra de negocio mudar
 
 ## Melhorias futuras desejaveis
 
+- simplificar a composicao das dependencias em um bootstrap unico
 - shutdown mais gracioso no stop de 23:00
+- healthcheck ou watchdog do sender
 - relatorio operacional diario resumido
 - documentar e automatizar melhor a recriacao dos launchers curtos
 - aumentar observabilidade de fim de scan e idle do sender
+- avaliar migracao de JSON para SQLite se a concorrencia aumentar

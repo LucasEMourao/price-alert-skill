@@ -17,6 +17,73 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros com automaca
 - Alimenta uma fila expirável
 - Envia mensagens para WhatsApp em fluxo serial
 
+## Arquitetura atual
+
+### Dominio
+
+Local: `core/domain/`
+
+Contem:
+- `models.py`
+- `types.py`
+- `lane_rules.py`
+- `identity.py`
+- `ranking.py`
+- `dedup_policy.py`
+- `queue_policy.py`
+
+Essa camada contem a regra de negocio pura e nao deve depender de Playwright, PowerShell ou JSON.
+
+### Aplicacao
+
+Local: `core/application/`
+
+Contem:
+- `scan_use_case.py`
+- `sender_use_case.py`
+
+Essa camada orquestra os casos de uso do projeto.
+
+### Ports
+
+Local: `core/ports/`
+
+Contem os contratos para:
+- fila
+- historico de enviados
+- scanners
+- afiliado
+- envio de mensagem
+- relogio
+
+### Adapters
+
+Local: `core/adapters/`
+
+Contem as integracoes concretas:
+- JSON
+- Amazon BR
+- Mercado Livre
+- `meli.la`
+- WhatsApp Web
+
+### Entrypoints
+
+Local: `core/entrypoints/`
+
+Contem:
+- `scan_cli.py`
+- `sender_cli.py`
+- `dispatch_cli.py`
+
+### Compatibilidade
+
+Os scripts antigos em `scripts/` continuam existindo, mas agora funcionam como cascas finas e pontos de compatibilidade:
+
+- `scripts/scan_deals.py`
+- `scripts/sender_worker.py`
+- `scripts/dispatch_pending_deals.py`
+
 ## Fluxo atual
 
 1. Instale as dependencias Python e o Chromium do Playwright.
@@ -29,16 +96,16 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros com automaca
 
 ## Scripts principais
 
-- `scripts/scan_deals.py` - scan, classificacao e populacao dos pools
-- `scripts/deal_selection.py` - queries, categorias, thresholds e prioridades
-- `scripts/deal_queue.py` - pools expiráveis e metadata da cadencia
-- `scripts/sender_worker.py` - sender unico e serial do WhatsApp
-- `scripts/dispatch_pending_deals.py` - drenagem pontual de poucas mensagens
-- `scripts/fetch_amazon_br.py` - scraping da Amazon BR
-- `scripts/fetch_ml_browser.py` - scraping do Mercado Livre
-- `scripts/generate_melila_links.py` - geracao de `meli.la`
-- `scripts/send_to_whatsapp.py` - automacao do WhatsApp Web
-- `scripts/utils.py` - utilitarios de formatacao, cooldown e persistencia
+- `scripts/scan_deals.py` - wrapper de compatibilidade para o scan
+- `scripts/deal_selection.py` - facade historica de selecao
+- `scripts/deal_queue.py` - facade historica de fila
+- `scripts/sender_worker.py` - wrapper de compatibilidade para o sender
+- `scripts/dispatch_pending_deals.py` - wrapper de compatibilidade para dispatch one-shot
+- `scripts/fetch_amazon_br.py` - scraper legado ainda usado pela integracao
+- `scripts/fetch_ml_browser.py` - scraper legado ainda usado pela integracao
+- `scripts/generate_melila_links.py` - fluxo de login e utilitario de afiliado
+- `scripts/send_to_whatsapp.py` - camada Playwright historica do WhatsApp Web
+- `scripts/utils.py` - facades e utilitarios historicos
 - `scripts/config.py` - leitura do `.env`
 
 ## Variaveis de ambiente
@@ -133,6 +200,7 @@ Valores podem variar. Se entrar em estoque baixo, some rapido.
 - A deduplicacao nao usa so o titulo; ela considera produto e oferta.
 - A fila fica em `data/deal_queue.json`.
 - O historico de cooldown fica em `data/sent_deals.json`.
+- As tasks do Windows usam launchers curtos em `C:\Users\bruno\PriceAlertTasks\`.
 
 ## Automacao Windows
 
@@ -148,9 +216,18 @@ Launchers locais:
 - `C:\Users\bruno\PriceAlertTasks\scan.ps1`
 - `C:\Users\bruno\PriceAlertTasks\stop.ps1`
 
+Wrappers reais no repositorio:
+
+- `run_sender.ps1`
+- `run_scan.ps1`
+- `stop_sender.ps1`
+
 ## Melhorias futuras registradas
 
+- simplificar a composicao das dependencias em um bootstrap central
 - shutdown mais gracioso no fim da janela de envio
+- healthcheck ou watchdog do sender
 - melhor resumo operacional nos logs
 - utilitario unico de diagnostico
 - documentacao de reinstalacao das tasks e launchers curtos
+- avaliar persistencia mais robusta se o volume crescer
