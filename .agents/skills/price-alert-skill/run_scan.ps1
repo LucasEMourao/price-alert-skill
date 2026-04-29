@@ -6,6 +6,7 @@ $script = Join-Path $root "scripts\scan_deals.py"
 $logDir = Join-Path $root "logs"
 $logFile = Join-Path $logDir ("scan-" + (Get-Date -Format "yyyy-MM-dd") + ".log")
 $arguments = @(
+    "-u"
     $script
     "--all"
     "--scan-only"

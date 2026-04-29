@@ -6,6 +6,7 @@ $script = Join-Path $root "scripts\sender_worker.py"
 $logDir = Join-Path $root "logs"
 $logFile = Join-Path $logDir ("sender-" + (Get-Date -Format "yyyy-MM-dd") + ".log")
 $arguments = @(
+    "-u"
     $script
     "--continuous"
 )
