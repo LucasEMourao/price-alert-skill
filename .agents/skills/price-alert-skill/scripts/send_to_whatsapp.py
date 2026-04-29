@@ -103,6 +103,17 @@ _GROUP_SEARCH_SELECTORS.extend(
 )
 
 
+def _clear_stale_profile_lock_files() -> None:
+    profile_dir = Path(USER_DATA_DIR)
+    for pattern in ("Singleton*", "DevToolsActivePort"):
+        for lock_file in profile_dir.glob(pattern):
+            try:
+                lock_file.unlink()
+                print(f"  Removed stale profile file: {lock_file.name}")
+            except OSError:
+                pass
+
+
 def _download_image(url: str, timeout: int = 30) -> str | None:
     """Download image to a temp file and return the path."""
     try:
@@ -496,16 +507,11 @@ def open_whatsapp_session(
     from playwright.sync_api import sync_playwright
 
     playwright = sync_playwright().start()
-    import glob as _glob
 
     if reset_session:
         _reset_whatsapp_session()
 
-    for lock_file in _glob.glob(str(Path(USER_DATA_DIR) / "SingletonLock")):
-        try:
-            Path(lock_file).unlink()
-        except OSError:
-            pass
+    _clear_stale_profile_lock_files()
 
     chrome_path = resolve_whatsapp_chrome_path()
     Path(USER_DATA_DIR).mkdir(parents=True, exist_ok=True)
@@ -529,7 +535,14 @@ def open_whatsapp_session(
         print("Using Playwright Chromium for WhatsApp Web.")
     print(f"Using WhatsApp Chrome profile dir: {USER_DATA_DIR}")
 
-    context = playwright.chromium.launch_persistent_context(**launch_kwargs)
+    try:
+        context = playwright.chromium.launch_persistent_context(**launch_kwargs)
+    except Exception as first_exc:
+        print(f"  WARNING: Failed to launch WhatsApp persistent context: {first_exc}")
+        print("  Retrying once after clearing stale profile files...")
+        _clear_stale_profile_lock_files()
+        time.sleep(2)
+        context = playwright.chromium.launch_persistent_context(**launch_kwargs)
     context.add_init_script(
         """
         Object.defineProperty(navigator, 'webdriver', {

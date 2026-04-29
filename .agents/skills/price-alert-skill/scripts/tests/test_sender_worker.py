@@ -71,6 +71,73 @@ def test_acquire_sender_lock_replaces_orphan_lock(tmp_path, monkeypatch):
         _release_sender_lock(fd)
 
 
+@patch("sender_worker.time.sleep", return_value=None)
+@patch("sender_worker._release_sender_lock")
+@patch("sender_worker._acquire_sender_lock", return_value=123)
+@patch("sender_worker.close_whatsapp_session")
+@patch("sender_worker.open_whatsapp_session")
+@patch(
+    "sender_worker.send_deal_in_open_chat",
+    return_value={"success": True, "dedup_key": "offer-1", "title": "Produto", "url": "https://example.com"},
+)
+@patch("sender_worker.mark_deals_as_sent")
+@patch("sender_worker.load_sent_deals", return_value={"sent": {}, "last_cleaned": None})
+@patch("sender_worker.save_deal_queue")
+@patch("sender_worker.load_deal_queue")
+def test_run_sender_retries_session_open_in_continuous_mode(
+    mock_load_queue,
+    _mock_save_queue,
+    _mock_load_sent,
+    mock_mark_sent,
+    _mock_send_deal,
+    mock_open_session,
+    _mock_close_session,
+    _mock_lock,
+    _mock_unlock,
+    _mock_sleep,
+):
+    priority = _deal(
+        title="Fonte 750W",
+        url="https://example.com/fonte",
+        product_url="https://example.com/fonte",
+        query="fonte 750w",
+        source_query="fonte 750w",
+        current_price=399.0,
+        previous_price=599.0,
+        discount_pct=33.0,
+    )
+    priority["lane"] = "priority"
+    priority["offer_key"] = "offer-1"
+    priority["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    priority["last_seen_scan"] = 1
+
+    populated_queue = _queue_with(priority=[priority])
+    mock_load_queue.side_effect = [populated_queue, populated_queue, populated_queue]
+    mock_open_session.side_effect = [RuntimeError("profile busy"), {"page": object()}]
+
+    results = run_sender(group_name="Grupo", continuous=True, max_messages=1, poll_seconds=0)
+
+    assert results["sent"] == 1
+    assert mock_open_session.call_count == 2
+    assert mock_mark_sent.call_args.args[0][0]["offer_key"] == "offer-1"
+
+
+@patch("sender_worker._stop_requested", side_effect=[True])
+@patch("sender_worker._release_sender_lock")
+@patch("sender_worker._acquire_sender_lock", return_value=123)
+@patch("sender_worker.close_whatsapp_session")
+def test_run_sender_honors_stop_request_before_processing(
+    _mock_close_session,
+    _mock_lock,
+    _mock_unlock,
+    _mock_stop_requested,
+):
+    results = run_sender(group_name="Grupo", continuous=True, poll_seconds=0)
+
+    assert results["sent"] == 0
+    assert results["failed"] == 0
+
+
 @patch("sender_worker._release_sender_lock")
 @patch("sender_worker._acquire_sender_lock", return_value=123)
 @patch("sender_worker.close_whatsapp_session")

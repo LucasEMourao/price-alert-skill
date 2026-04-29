@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import os
 import time
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,7 @@ from utils import load_sent_deals, mark_deals_as_sent
 
 ROOT = Path(__file__).resolve().parents[1]
 SENDER_LOCK_FILE = ROOT / "data" / "sender_worker.lock"
+STOP_REQUEST_FILE = ROOT / "data" / "sender_stop.request"
 
 
 def _utc_now() -> datetime:
@@ -105,6 +107,10 @@ def _release_sender_lock(fd: int | None) -> None:
         pass
 
 
+def _stop_requested() -> bool:
+    return STOP_REQUEST_FILE.exists()
+
+
 def _select_next_deal(
     queue: dict[str, Any],
     *,
@@ -161,6 +167,10 @@ def run_sender(
 
     try:
         while True:
+            if _stop_requested():
+                print("Sender stop requested. Shutting down gracefully.")
+                break
+
             now = _utc_now()
             queue = prune_expired_entries(load_deal_queue(), now=now)
             deal, non_urgent_index = _select_next_deal(
@@ -176,6 +186,10 @@ def run_sender(
                 if not continuous:
                     break
 
+                if _stop_requested():
+                    print("Sender stop requested while idle. Stopping.")
+                    break
+
                 if idle_exit_seconds and (time.time() - idle_started_at) >= idle_exit_seconds:
                     print("Sender worker idle timeout reached. Stopping.")
                     break
@@ -185,11 +199,19 @@ def run_sender(
 
             idle_started_at = time.time()
             if session is None:
-                session = open_whatsapp_session(
-                    group_name=group_name,
-                    headed=headed,
-                    reset_session=reset_session,
-                )
+                try:
+                    session = open_whatsapp_session(
+                        group_name=group_name,
+                        headed=headed,
+                        reset_session=reset_session,
+                    )
+                except Exception as exc:
+                    print(f"  WARNING: Failed to open WhatsApp session: {exc}")
+                    traceback.print_exc()
+                    if not continuous:
+                        raise
+                    time.sleep(poll_seconds)
+                    continue
 
             print(
                 f"\nSending next {deal.get('lane', 'normal')} deal: "
