@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from config import configure_utf8_stdio, resolve_whatsapp_group
+from core.adapters.amazon_scanner import AmazonMarketplaceScanner
 from core.adapters.meli_affiliate_links import MeliAffiliateLinkGenerator
+from core.adapters.mercadolivre_scanner import MercadoLivreMarketplaceScanner
 from core.adapters.whatsapp_sender import WhatsAppBatchSender
 from core.application.scan_use_case import (
     apply_affiliate_links as application_apply_affiliate_links,
@@ -33,8 +35,6 @@ from deal_queue import (
     upsert_pool_deal,
 )
 from deal_selection import get_queries, prepare_deal_for_selection
-from fetch_amazon_br import run as run_amazon
-from fetch_ml_browser import run as run_mercadolivre_browser
 from utils import (
     calculate_discount,
     can_send_again,
@@ -46,8 +46,12 @@ from utils import (
 
 ROOT = Path(__file__).resolve().parents[1]
 MESSAGES_DIR = ROOT / "data" / "messages"
+_AMAZON_SCANNER = AmazonMarketplaceScanner()
+_MERCADOLIVRE_SCANNER = MercadoLivreMarketplaceScanner()
 _AFFILIATE_LINK_GENERATOR = MeliAffiliateLinkGenerator()
 _WHATSAPP_BATCH_SENDER = WhatsAppBatchSender()
+run_amazon = _AMAZON_SCANNER
+run_mercadolivre_browser = _MERCADOLIVRE_SCANNER
 
 
 def extract_deals_from_products(
