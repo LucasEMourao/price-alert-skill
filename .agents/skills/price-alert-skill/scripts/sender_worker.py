@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from config import configure_utf8_stdio, resolve_whatsapp_group
+from core.adapters.whatsapp_sender import (
+    WhatsAppDealChatSenderAdapter,
+    WhatsAppSessionCloserAdapter,
+    WhatsAppSessionOpenerAdapter,
+)
 from core.application.sender_use_case import (
     run_sender_loop as application_run_sender_loop,
     select_next_deal as application_select_next_deal,
@@ -26,17 +31,18 @@ from deal_queue import (
     save_deal_queue,
 )
 from deal_selection import CADENCE_CONFIG, sort_deals_for_sending
-from send_to_whatsapp import (
-    close_whatsapp_session,
-    open_whatsapp_session,
-    send_deal_in_open_chat,
-)
 from utils import load_sent_deals, mark_deals_as_sent
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SENDER_LOCK_FILE = ROOT / "data" / "sender_worker.lock"
 STOP_REQUEST_FILE = ROOT / "data" / "sender_stop.request"
+_WHATSAPP_SESSION_OPENER = WhatsAppSessionOpenerAdapter()
+_WHATSAPP_SESSION_CLOSER = WhatsAppSessionCloserAdapter()
+_WHATSAPP_DEAL_CHAT_SENDER = WhatsAppDealChatSenderAdapter()
+open_whatsapp_session = _WHATSAPP_SESSION_OPENER
+close_whatsapp_session = _WHATSAPP_SESSION_CLOSER
+send_deal_in_open_chat = _WHATSAPP_DEAL_CHAT_SENDER
 
 
 def _utc_now() -> datetime:

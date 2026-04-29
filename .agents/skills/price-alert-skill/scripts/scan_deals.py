@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from config import configure_utf8_stdio, resolve_whatsapp_group
+from core.adapters.meli_affiliate_links import MeliAffiliateLinkGenerator
+from core.adapters.whatsapp_sender import WhatsAppBatchSender
 from core.application.scan_use_case import (
     apply_affiliate_links as application_apply_affiliate_links,
     build_messages_payload as application_build_messages_payload,
@@ -33,7 +35,6 @@ from deal_queue import (
 from deal_selection import get_queries, prepare_deal_for_selection
 from fetch_amazon_br import run as run_amazon
 from fetch_ml_browser import run as run_mercadolivre_browser
-from generate_melila_links import generate_links
 from utils import (
     calculate_discount,
     can_send_again,
@@ -45,6 +46,8 @@ from utils import (
 
 ROOT = Path(__file__).resolve().parents[1]
 MESSAGES_DIR = ROOT / "data" / "messages"
+_AFFILIATE_LINK_GENERATOR = MeliAffiliateLinkGenerator()
+_WHATSAPP_BATCH_SENDER = WhatsAppBatchSender()
 
 
 def extract_deals_from_products(
@@ -88,57 +91,28 @@ def scan_all(
     queries: list[str],
 ) -> list[dict[str, Any]]:
     """Scan multiple queries across marketplaces."""
-    all_deals = []
-    for query in queries:
-        for marketplace in marketplaces:
-            try:
-                deals = scan_marketplace(marketplace, query, max_results, min_discount)
-                if deals:
-                    print(f"  ✓ {marketplace} / {query}: {len(deals)} deals found")
-                all_deals.extend(deals)
-            except Exception as exc:
-                print(f"  ✗ {marketplace} / {query}: {exc}")
-    return all_deals
+    return application_scan_all(
+        max_results,
+        min_discount,
+        marketplaces,
+        queries,
+        scan_marketplace_fn=scan_marketplace,
+        logger=print,
+    )
 
 
 def deduplicate_run_deals(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deduplicate deals within the same scan run by product URL."""
-    seen_urls: set[str] = set()
-    unique_deals = []
-    for deal in deals:
-        product_url = deal.get("product_url") or deal.get("url")
-        if product_url not in seen_urls:
-            seen_urls.add(product_url)
-            unique_deals.append(deal)
-    return unique_deals
+    return application_deduplicate_run_deals(deals)
 
 
 def apply_affiliate_links(deals: list[dict[str, Any]]) -> None:
     """Replace Mercado Livre URLs with generated affiliate links when possible."""
-    ml_deals = [deal for deal in deals if deal["marketplace"] == "mercadolivre_br"]
-    if not ml_deals:
-        return
-
-    ml_urls = [deal["product_url"] for deal in ml_deals]
-    print(f"\nGenerating meli.la links for {len(ml_urls)} ML deals...")
-    try:
-        melila_map = generate_links(ml_urls)
-        for deal in ml_deals:
-            product_url = deal["product_url"]
-            affiliate_url = melila_map.get(product_url, product_url)
-            deal["affiliate_url"] = affiliate_url
-            deal["url"] = affiliate_url
-        generated = sum(
-            1
-            for url in ml_urls
-            if melila_map.get(url) and melila_map[url] != url
-        )
-        print(f"  Generated {generated}/{len(ml_urls)} meli.la links")
-    except Exception as exc:
-        print(f"  WARNING: meli.la generation failed: {exc}")
-        print("  Falling back to original URLs")
-        for deal in ml_deals:
-            deal["affiliate_url"] = deal["product_url"]
+    application_apply_affiliate_links(
+        deals,
+        generate_links_fn=_AFFILIATE_LINK_GENERATOR,
+        logger=print,
+    )
 
 
 def build_messages_payload(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -177,10 +151,8 @@ def _send_whatsapp_deals(
             "Set WHATSAPP_GROUP in .env or pass --whatsapp-group when using --send-whatsapp"
         )
 
-    from send_to_whatsapp import send_deals_to_whatsapp
-
     print(f"\nSending {len(deals)} deal(s) to WhatsApp group: {group_name}...")
-    return send_deals_to_whatsapp(
+    return _WHATSAPP_BATCH_SENDER(
         deals=[
             {
                 "title": deal["title"],
