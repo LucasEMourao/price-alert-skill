@@ -5,11 +5,11 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from core.adapters.json_sent_deals_repository import JSONSentDealsRepository
 from core.domain.dedup_policy import (
     build_sent_record as domain_build_sent_record,
     can_send_again as domain_can_send_again,
@@ -155,6 +155,14 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+_SENT_DEALS_REPOSITORY = JSONSentDealsRepository(
+    sent_deals_file_getter=lambda: SENT_DEALS_FILE,
+    cadence_config_getter=lambda: CADENCE_CONFIG,
+    retention_days_getter=lambda: DEDUP_RETENTION_DAYS,
+    now_fn=_utc_now,
+)
+
+
 def _normalize_sent_record(key: str, value: Any) -> dict[str, Any]:
     """Normalize legacy sent-deal formats to the richer metadata shape."""
     return domain_normalize_sent_record(key, value)
@@ -167,19 +175,12 @@ def normalize_sent_deals_data(data: dict[str, Any] | None) -> dict[str, Any]:
 
 def load_sent_deals() -> dict[str, Any]:
     """Load sent deals from disk, return empty structure if missing."""
-    if SENT_DEALS_FILE.exists():
-        raw = json.loads(SENT_DEALS_FILE.read_text(encoding="utf-8"))
-        return normalize_sent_deals_data(raw)
-    return {"sent": {}, "last_cleaned": None}
+    return _SENT_DEALS_REPOSITORY.load_sent_deals()
 
 
 def save_sent_deals(data: dict[str, Any]) -> None:
     """Persist sent deals to disk."""
-    SENT_DEALS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SENT_DEALS_FILE.write_text(
-        json.dumps(normalize_sent_deals_data(data), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _SENT_DEALS_REPOSITORY.save_sent_deals(data)
 
 
 def clean_old_deals(
@@ -187,7 +188,7 @@ def clean_old_deals(
     max_age_days: int = DEDUP_RETENTION_DAYS,
 ) -> dict[str, Any]:
     """Remove deals older than max_age_days."""
-    return domain_clean_old_deals(data, now=_utc_now(), max_age_days=max_age_days)
+    return _SENT_DEALS_REPOSITORY.clean_old_deals(data, max_age_days=max_age_days)
 
 
 def build_sent_record(
@@ -222,14 +223,7 @@ def can_send_again(
     now: datetime | None = None,
 ) -> bool:
     """Return True when the deal is eligible to be sent again."""
-    sent_data = clean_old_deals(sent_data or load_sent_deals())
-    now = now or _utc_now()
-    return domain_can_send_again(
-        deal,
-        sent_data,
-        now=now,
-        cadence_config=CADENCE_CONFIG,
-    )
+    return _SENT_DEALS_REPOSITORY.can_send_again(deal, sent_data, now=now)
 
 
 def filter_new_deals(
@@ -239,23 +233,12 @@ def filter_new_deals(
     mark_as_sent: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Filter out deals already sent in previous runs."""
-    if sent_data is None:
-        sent_data = load_sent_deals()
-
-    sent_data = clean_old_deals(sent_data)
-    new_deals = []
-    now_iso = _utc_now().isoformat()
-
-    for deal in deals:
-        if can_send_again(deal, sent_data, now=datetime.fromisoformat(now_iso)):
-            if mark_as_sent:
-                sent_data["sent"][deal_offer_key(deal)] = build_sent_record(deal, sent_at=now_iso)
-            new_deals.append(deal)
-
-    if auto_save:
-        save_sent_deals(sent_data)
-
-    return new_deals, sent_data
+    return _SENT_DEALS_REPOSITORY.filter_new_deals(
+        deals,
+        sent_data,
+        auto_save=auto_save,
+        mark_as_sent=mark_as_sent,
+    )
 
 
 def mark_deals_as_sent(
@@ -264,16 +247,8 @@ def mark_deals_as_sent(
     auto_save: bool = True,
 ) -> dict[str, Any]:
     """Persist deals as sent after the downstream action succeeds."""
-    if sent_data is None:
-        sent_data = load_sent_deals()
-
-    sent_data = clean_old_deals(sent_data)
-    now_iso = _utc_now().isoformat()
-
-    for deal in deals:
-        sent_data["sent"][deal_offer_key(deal)] = build_sent_record(deal, sent_at=now_iso)
-
-    if auto_save:
-        save_sent_deals(sent_data)
-
-    return sent_data
+    return _SENT_DEALS_REPOSITORY.mark_deals_as_sent(
+        deals,
+        sent_data,
+        auto_save=auto_save,
+    )

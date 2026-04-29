@@ -4,11 +4,11 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from core.adapters.json_queue_repository import JSONQueueRepository
 from core.domain.queue_policy import (
     POOL_KEYS,
     begin_scan_run as domain_begin_scan_run,
@@ -30,6 +30,10 @@ from deal_selection import ACTIVE_LANES, CADENCE_CONFIG
 
 ROOT = Path(__file__).resolve().parents[1]
 DEAL_QUEUE_FILE = ROOT / "data" / "deal_queue.json"
+_QUEUE_REPOSITORY = JSONQueueRepository(
+    queue_file_getter=lambda: DEAL_QUEUE_FILE,
+    cadence_config_getter=lambda: CADENCE_CONFIG,
+)
 
 
 def _utc_now() -> datetime:
@@ -58,51 +62,22 @@ def _normalize_entry(
 
 def load_deal_queue() -> dict[str, Any]:
     """Load the persisted pools from disk, migrating older queue shapes."""
-    if not DEAL_QUEUE_FILE.exists():
-        return _default_queue()
-
-    data = json.loads(DEAL_QUEUE_FILE.read_text(encoding="utf-8"))
-    queue = _default_queue()
-
-    if "urgent_pool" in data or "priority_pool" in data or "normal_pool" in data:
-        for lane, pool_key in POOL_KEYS.items():
-            queue[pool_key] = [
-                _normalize_entry(entry, lane=lane)
-                for entry in data.get(pool_key, [])
-            ]
-    else:
-        # Migrate the older queue shape into the new pools.
-        queue["urgent_pool"] = [
-            _normalize_entry(entry, lane="urgent")
-            for entry in data.get("urgent_retry", [])
-        ]
-        queue["normal_pool"] = [
-            _normalize_entry(entry, lane="normal")
-            for entry in data.get("normal", [])
-        ]
-
-    queue["meta"].update(data.get("meta", {}))
-    queue["meta"]["scan_sequence"] = int(queue["meta"].get("scan_sequence", 0) or 0)
-    return queue
+    return _QUEUE_REPOSITORY.load_deal_queue()
 
 
 def save_deal_queue(queue: dict[str, Any]) -> None:
     """Persist the pool state to disk."""
-    DEAL_QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    DEAL_QUEUE_FILE.write_text(
-        json.dumps(queue, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _QUEUE_REPOSITORY.save_deal_queue(queue)
 
 
 def begin_scan_run(queue: dict[str, Any], now: datetime | str | None = None) -> int:
     """Increment the scan sequence and stamp the latest scan time."""
-    return domain_begin_scan_run(queue, now)
+    return _QUEUE_REPOSITORY.begin_scan_run(queue, now)
 
 
 def mark_sender_tick(queue: dict[str, Any], now: datetime | str | None = None) -> dict[str, Any]:
     """Update metadata after a sender processing tick."""
-    return domain_mark_sender_tick(queue, now)
+    return _QUEUE_REPOSITORY.mark_sender_tick(queue, now)
 
 
 def _iter_pool_names() -> tuple[str, ...]:
@@ -136,12 +111,12 @@ def _remove_at_location(queue: dict[str, Any], pool_name: str | None, index: int
 
 def remove_entry_by_offer_key(queue: dict[str, Any], offer_key: str) -> bool:
     """Remove a specific offer from the pools."""
-    return domain_remove_entry_by_offer_key(queue, offer_key)
+    return _QUEUE_REPOSITORY.remove_entry_by_offer_key(queue, offer_key)
 
 
 def remove_entry_by_product_key(queue: dict[str, Any], product_key: str) -> bool:
     """Remove any pooled entry for the given product."""
-    return domain_remove_entry_by_product_key(queue, product_key)
+    return _QUEUE_REPOSITORY.remove_entry_by_product_key(queue, product_key)
 
 
 def _build_pool_entry(
@@ -182,7 +157,7 @@ def upsert_pool_deal(
     scan_sequence: int | None = None,
 ) -> str:
     """Insert or refresh a deal in the target lane pool."""
-    return domain_upsert_pool_deal(
+    return _QUEUE_REPOSITORY.upsert_pool_deal(
         queue,
         deal,
         lane,
@@ -198,12 +173,10 @@ def mark_deal_failed(
     now: datetime | str | None = None,
 ) -> bool:
     """Record a send failure and keep the deal pending if it still has retries left."""
-    return domain_mark_deal_failed(
+    return _QUEUE_REPOSITORY.mark_deal_failed(
         queue,
         offer_key,
         now=now,
-        retry_backoff_seconds=int(CADENCE_CONFIG["retry_backoff_seconds"]),
-        max_send_retries=int(CADENCE_CONFIG["max_send_retries"]),
     )
 
 
@@ -213,24 +186,7 @@ def prune_expired_entries(
     now: datetime | str | None = None,
 ) -> dict[str, Any]:
     """Drop entries that have fallen out of their freshness windows."""
-    return domain_prune_expired_entries(
-        queue,
-        now=now,
-        lane_windows={
-            "urgent": (
-                int(CADENCE_CONFIG["urgent_window_minutes"]),
-                int(CADENCE_CONFIG["urgent_window_scans"]),
-            ),
-            "priority": (
-                int(CADENCE_CONFIG["priority_window_minutes"]),
-                int(CADENCE_CONFIG["priority_window_scans"]),
-            ),
-            "normal": (
-                int(CADENCE_CONFIG["normal_window_minutes"]),
-                int(CADENCE_CONFIG["normal_window_scans"]),
-            ),
-        },
-    )
+    return _QUEUE_REPOSITORY.prune_expired_entries(queue, now=now)
 
 
 def get_sendable_entries(
@@ -240,4 +196,4 @@ def get_sendable_entries(
     now: datetime | str | None = None,
 ) -> list[dict[str, Any]]:
     """Return pending entries whose retry backoff has elapsed."""
-    return domain_get_sendable_entries(queue, lane, now=now)
+    return _QUEUE_REPOSITORY.get_sendable_entries(queue, lane, now=now)
