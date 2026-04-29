@@ -5,8 +5,13 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlparse
 
+from core.domain.identity import (
+    build_offer_key,
+    build_product_key,
+    calculate_savings_brl,
+    normalize_url_for_key,
+)
 from core.domain.lane_rules import (
     ACTIVE_LANES,
     CATEGORY_RULES,
@@ -19,6 +24,11 @@ from core.domain.lane_rules import (
     qualifies_normal,
     qualifies_priority,
     qualifies_urgent,
+)
+from core.domain.ranking import (
+    deal_sort_key,
+    is_better_deal,
+    sort_deals_for_sending,
 )
 
 
@@ -91,38 +101,6 @@ def get_query_category(query: str) -> str:
     return QUERY_TO_CATEGORY.get((query or "").strip().lower(), DEFAULT_CATEGORY)
 
 
-def normalize_url_for_key(url: str) -> str:
-    """Strip query string and fragment so the same product keeps a stable key."""
-    parsed = urlparse(url or "")
-    path = parsed.path.rstrip("/")
-    return f"{parsed.netloc}{path}".lower().strip("/")
-
-
-def build_product_key(url: str) -> str:
-    """Build a stable product key from the raw product URL."""
-    normalized = normalize_url_for_key(url)
-    return normalized or (url or "").strip().lower()
-
-
-def build_offer_key(product_key: str, current_price: float | None) -> str:
-    """Build an offer key that changes when the price changes."""
-    if current_price is None:
-        return product_key
-    return f"{product_key}|{float(current_price):.2f}"
-
-
-def calculate_savings_brl(
-    current_price: float | None,
-    previous_price: float | None,
-) -> float:
-    """Calculate absolute savings in BRL."""
-    if current_price is None or previous_price is None:
-        return 0.0
-    if previous_price <= current_price:
-        return 0.0
-    return round(previous_price - current_price, 2)
-
-
 def prepare_deal_for_selection(deal: dict[str, Any]) -> dict[str, Any]:
     """Add selection metadata to a scanned deal."""
     prepared = dict(deal)
@@ -148,26 +126,3 @@ def prepare_deal_for_selection(deal: dict[str, Any]) -> dict[str, Any]:
     prepared["lane"] = classify_deal_lane(prepared)
     prepared["is_super_promo"] = prepared["lane"] == "urgent"
     return prepared
-
-
-def deal_sort_key(deal: dict[str, Any]) -> tuple[Any, ...]:
-    """Build a stable ranking key for deals inside the same lane."""
-    savings = -(float(deal.get("savings_brl") or 0.0))
-    discount = -(float(deal.get("discount_pct") or 0.0))
-    price = float(deal.get("current_price") or 0.0)
-    title = str(deal.get("title", "")).lower()
-    return (savings, discount, price, title)
-
-
-def sort_deals_for_sending(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Sort deals by commercial strength for sender consumption."""
-    return sorted(deals, key=deal_sort_key)
-
-
-def is_better_deal(candidate: dict[str, Any], current: dict[str, Any]) -> bool:
-    """Return True when candidate should replace current in the pools."""
-    candidate_rank = get_lane_rank(candidate.get("lane", "discarded"))
-    current_rank = get_lane_rank(current.get("lane", "discarded"))
-    if candidate_rank != current_rank:
-        return candidate_rank > current_rank
-    return deal_sort_key(candidate) < deal_sort_key(current)
