@@ -84,6 +84,8 @@ Os scripts antigos em `scripts/` continuam existindo, mas agora funcionam como c
 - `scripts/sender_worker.py`
 - `scripts/dispatch_pending_deals.py`
 
+O bootstrap de compatibilidade fica em `scripts/config.py`, que garante o root do projeto no `sys.path` quando um desses scripts e executado diretamente.
+
 ## Fluxo atual
 
 1. Instale as dependencias Python e o Chromium do Playwright.
@@ -221,6 +223,17 @@ Wrappers reais no repositorio:
 - `run_sender.ps1`
 - `run_scan.ps1`
 - `stop_sender.ps1`
+
+Resumo operacional:
+
+- `run_scan.ps1` executa um scan one-shot por disparo
+- `run_sender.ps1` supervisiona o sender continuo e pode relancar o processo
+- `stop_sender.ps1` pede parada graciosa antes do fallback forcado
+
+## Observacoes de log e console
+
+- os logs operacionais usam timestamps em UTC
+- o console do Windows pode mostrar caracteres corrompidos para emojis e alguns acentos; isso nao significa falha funcional automaticamente
 
 ## Melhorias futuras registradas
 

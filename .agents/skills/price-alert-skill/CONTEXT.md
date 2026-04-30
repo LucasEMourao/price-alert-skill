@@ -248,6 +248,17 @@ Para contornar o limite de tamanho do `schtasks /TR`, as tasks chamam launchers 
 
 Esses arquivos sao parte da configuracao operacional da maquina. Se o caminho do repositorio mudar, eles precisam ser recriados ou atualizados.
 
+Comportamento dos wrappers:
+
+- `run_scan.ps1`
+  Executa um scan one-shot e encerra.
+
+- `run_sender.ps1`
+  Mantem um loop de supervisao simples para o sender continuo e relanca o processo se ele sair sem pedido explicito de stop.
+
+- `stop_sender.ps1`
+  Sinaliza parada graciosa e, se necessario, faz fallback de encerramento pelo processo/lock.
+
 ## Comandos de referencia
 
 ```bash
@@ -282,6 +293,12 @@ python3 scripts/dispatch_pending_deals.py --max-messages 4
 - O grupo padrao vem de `WHATSAPP_GROUP` no `.env`.
 - O sender roda oculto no Windows, sem depender de janela visivel.
 - Os scripts antigos foram preservados para compatibilidade operacional.
+- `scripts/config.py` garante o bootstrap do root do projeto no `sys.path` para que os entrypoints legados consigam importar `core` quando executados diretamente.
+
+## Observacoes de log
+
+- Os arquivos de log operacionais usam timestamp em UTC. Para comparar com o horario local de Sao Paulo, considere a conversao correspondente.
+- O terminal do Windows ainda pode exibir mojibake em alguns emojis e acentos. Isso nao significa, por si so, falha funcional do scan ou do sender.
 
 ## Melhorias futuras registradas
 

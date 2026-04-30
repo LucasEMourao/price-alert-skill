@@ -90,6 +90,12 @@ Esses launchers apenas delegam para:
 - `run_scan.ps1`
 - `stop_sender.ps1`
 
+Comportamento esperado:
+
+- `run_scan.ps1` faz apenas uma rodada e encerra com o codigo do processo Python.
+- `run_sender.ps1` funciona como supervisor do sender continuo, com relancamento automatico quando nao houve pedido de stop.
+- `stop_sender.ps1` pede parada graciosa antes de recorrer a encerramento forcado.
+
 ### 7. Camadas da arquitetura
 
 #### Dominio
@@ -169,6 +175,11 @@ Get-Content ".\logs\sender-YYYY-MM-DD.log" -Tail 50
 Get-Content ".\logs\scan-YYYY-MM-DD.log" -Tail 50
 ```
 
+Observacoes:
+
+- os timestamps desses logs estao em UTC
+- mojibake no console do Windows pode afetar a leitura visual dos caracteres, mas nao implica falha operacional por si so
+
 ```powershell
 $q = Get-Content ".\data\deal_queue.json" -Raw | ConvertFrom-Json
 [pscustomobject]@{
@@ -201,6 +212,7 @@ $q = Get-Content ".\data\deal_queue.json" -Raw | ConvertFrom-Json
 - simplificar a composicao das dependencias em um bootstrap unico
 - shutdown mais gracioso no stop de 23:00
 - healthcheck ou watchdog do sender
+- comando de diagnostico consolidado para tasks, fila, lock e logs
 - relatorio operacional diario resumido
 - documentar e automatizar melhor a recriacao dos launchers curtos
 - aumentar observabilidade de fim de scan e idle do sender
