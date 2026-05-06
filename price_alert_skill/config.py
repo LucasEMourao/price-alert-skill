@@ -118,9 +118,9 @@ def resolve_whatsapp_profile_dir() -> str:
             / "windows_chrome_profile"
         )
 
-    return str(
-        resolve_skill_root()
-        / "data"
-        / "whatsapp_session"
-        / "linux_chrome_profile"
-    )
+    session_root = resolve_skill_root() / "data" / "whatsapp_session"
+    legacy_linux_profile = session_root / "chrome_profile"
+    if legacy_linux_profile.exists():
+        return str(legacy_linux_profile)
+
+    return str(session_root / "linux_chrome_profile")

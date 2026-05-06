@@ -16,7 +16,10 @@ the QR code once. Use --headed on first run to scan the QR code.
 
 import argparse
 import json
+import os
+import re
 import shutil
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -101,6 +104,18 @@ _LOGGED_IN_SELECTORS = [
     "#side",
     '[data-testid="chat-list-search"]',
 ]
+_LOADING_CHATS_TEXT_MARKERS = (
+    "carregando suas conversas",
+    "loading your chats",
+)
+_UNSUPPORTED_BROWSER_TEXT_MARKERS = (
+    "whatsapp works with google chrome",
+    "update google chrome",
+    "navegador incompat?vel",
+    "navegador nao suportado",
+    "navegador n?o suportado",
+)
+_DEFAULT_HEADLESS_CHROME_VERSION = "120.0.0.0"
 _GROUP_SEARCH_SELECTORS = [
     'input[aria-label="Search or start a new chat"]',
     'input[aria-label="Pesquisar ou começar uma nova conversa"]',
@@ -212,6 +227,20 @@ def _page_has_any_visible_selector(page, selectors: list[str]) -> bool:
         except Exception:
             continue
     return False
+
+
+def _page_contains_any_text(page, markers: tuple[str, ...]) -> bool:
+    """Return True when the page body contains one of the given text markers."""
+    try:
+        body_text = page.locator("body").inner_text(timeout=1000)
+    except Exception:
+        return False
+
+    if not isinstance(body_text, str):
+        return False
+
+    normalized = body_text.lower()
+    return any(marker in normalized for marker in markers)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -361,12 +390,78 @@ def _get_whatsapp_state(page) -> str:
     if _page_has_any_visible_selector(page, _QR_CODE_SELECTORS):
         return "qr"
 
+    if _page_contains_any_text(page, _UNSUPPORTED_BROWSER_TEXT_MARKERS):
+        return "unsupported_browser"
+
+    if _page_contains_any_text(page, _LOADING_CHATS_TEXT_MARKERS):
+        return "loading_chats"
+
     return "loading"
 
 
 def _is_logged_in(page) -> bool:
     """Check if WhatsApp Web is logged in (no QR code visible)."""
     return _get_whatsapp_state(page) == "logged_in"
+
+
+def _detect_chrome_version(executable_path: str | None) -> str:
+    """Return the full Chrome/Chromium version for UA normalization."""
+    if not isinstance(executable_path, str) or not executable_path:
+        return ""
+
+    try:
+        result = subprocess.run(
+            [executable_path, "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return ""
+
+    output = f"{result.stdout} {result.stderr}"
+    match = re.search(r"(\d+\.\d+\.\d+\.\d+)", output)
+    return match.group(1) if match else ""
+
+
+def _chrome_major_version(chrome_version: str | None) -> str:
+    version = chrome_version or _DEFAULT_HEADLESS_CHROME_VERSION
+    return version.split(".", 1)[0]
+
+
+def _chrome_ua_version(chrome_version: str | None) -> str:
+    return f"{_chrome_major_version(chrome_version)}.0.0.0"
+
+
+def _build_headless_chrome_user_agent(chrome_version: str | None) -> str:
+    ua_version = _chrome_ua_version(chrome_version)
+    return (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        f"(KHTML, like Gecko) Chrome/{ua_version} Safari/537.36"
+    )
+
+
+def _build_headless_chrome_client_hints(chrome_version: str | None) -> dict[str, str]:
+    major_version = _chrome_major_version(chrome_version)
+    return {
+        "sec-ch-ua": f'"Chromium";v="{major_version}", "Not.A/Brand";v="8"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Linux"',
+    }
+
+
+def _resolve_headless_user_agent(
+    headed: bool,
+    chrome_version: str | None = None,
+) -> str | None:
+    """Return a regular Chrome UA for headless runs so WhatsApp does not reject it."""
+    explicit_user_agent = os.environ.get("WHATSAPP_USER_AGENT", "").strip()
+    if explicit_user_agent:
+        return explicit_user_agent
+    if headed:
+        return None
+    return _build_headless_chrome_user_agent(chrome_version)
 
 
 def _find_group_search_box(page, timeout_ms: int = 15000):
@@ -420,11 +515,26 @@ def _ensure_logged_in(page, headed: bool = False, timeout_ms: int = 300000) -> N
         pass
 
     if not headed:
-        print("  Running without --headed. Waiting for an existing session to finish loading...")
-        deadline = time.time() + 45
+        try:
+            timeout_seconds = float(
+                os.environ.get("WHATSAPP_HEADLESS_TIMEOUT_SECONDS", timeout_ms / 1000)
+            )
+        except ValueError:
+            timeout_seconds = timeout_ms / 1000
+        debug_after_seconds = min(60, max(10, timeout_seconds / 3))
+        reload_after_seconds = min(120, max(30, timeout_seconds / 2))
+        print(
+            "  Running without --headed. Waiting up to %ss for the existing session "
+            "and chats to finish loading..." % int(timeout_seconds)
+        )
+        start = time.time()
+        deadline = start + timeout_seconds
         last_state = None
+        debug_captured = False
+        reload_attempted = False
 
         while time.time() < deadline:
+            elapsed = time.time() - start
             state = _get_whatsapp_state(page)
             if state != last_state:
                 print(f"  WhatsApp auth state: {state}")
@@ -444,11 +554,39 @@ def _ensure_logged_in(page, headed: bool = False, timeout_ms: int = 300000) -> N
                     "Session will be saved for future runs."
                 )
 
+            if state == "unsupported_browser":
+                _capture_whatsapp_debug_artifacts(page, prefix="whatsapp_headless_unsupported")
+                raise RuntimeError(
+                    "WhatsApp rejected the headless browser as unsupported. "
+                    "The adapter will use a regular Chrome user-agent in headless mode; "
+                    "set WHATSAPP_USER_AGENT if WhatsApp changes this check again."
+                )
+
+            if elapsed >= debug_after_seconds and not debug_captured:
+                print("  WhatsApp is still loading chats in headless mode; saving debug artifacts...")
+                _capture_whatsapp_debug_artifacts(page, prefix="whatsapp_headless_loading")
+                debug_captured = True
+
+            if elapsed >= reload_after_seconds and not reload_attempted:
+                print(
+                    "  WhatsApp is still loading in headless mode after %ss. "
+                    "Trying a single refresh..." % int(elapsed)
+                )
+                try:
+                    page.reload(wait_until="domcontentloaded", timeout=60000)
+                except Exception as exc:
+                    print(f"  WARNING: Headless refresh failed: {exc}")
+                reload_attempted = True
+                time.sleep(2)
+                continue
+
             time.sleep(2)
 
+        _capture_whatsapp_debug_artifacts(page, prefix="whatsapp_headless_timeout")
         raise RuntimeError(
-            "WhatsApp session did not finish loading in headless mode. "
-            "Run once with --headed to refresh the session if needed."
+            "WhatsApp session is authenticated, but chats did not finish loading "
+            "in headless mode before the timeout. Check the saved debug artifacts "
+            "or run once with --headed to refresh the session if needed."
         )
 
     print("  Waiting up to %ss for authentication..." % (timeout_ms // 1000))
@@ -707,6 +845,15 @@ def open_whatsapp_session(
                 "--disable-infobars",
             ],
         }
+        browser_executable = chrome_path or getattr(playwright.chromium, "executable_path", "")
+        chrome_version = _detect_chrome_version(browser_executable)
+        user_agent = _resolve_headless_user_agent(headed, chrome_version)
+        if user_agent:
+            launch_kwargs["user_agent"] = user_agent
+            launch_kwargs["extra_http_headers"] = _build_headless_chrome_client_hints(
+                chrome_version
+            )
+            launch_kwargs["args"].append(f"--user-agent={user_agent}")
         if chrome_path:
             print(f"Using Chrome executable for WhatsApp Web: {chrome_path}")
             launch_kwargs["executable_path"] = chrome_path
@@ -722,8 +869,7 @@ def open_whatsapp_session(
             _clear_stale_profile_lock_files(user_data_dir)
             time.sleep(2)
             context = playwright.chromium.launch_persistent_context(**launch_kwargs)
-        context.add_init_script(
-            """
+        init_script = """
             Object.defineProperty(navigator, 'webdriver', {
               get: () => undefined,
             });
@@ -735,7 +881,52 @@ def open_whatsapp_session(
               get: () => [1, 2, 3, 4, 5],
             });
             """
-        )
+        if user_agent:
+            chrome_major_version = _chrome_major_version(chrome_version)
+            chrome_ua_version = _chrome_ua_version(chrome_version)
+            init_script += f"""
+            Object.defineProperty(navigator, 'userAgent', {{
+              get: () => {json.dumps(user_agent)},
+            }});
+            if (navigator.userAgentData) {{
+              Object.defineProperty(navigator, 'userAgentData', {{
+                get: () => ({{
+                  brands: [
+                    {{brand: 'Chromium', version: {json.dumps(chrome_major_version)}}},
+                    {{brand: 'Not.A/Brand', version: '8'}},
+                  ],
+                  mobile: false,
+                  platform: 'Linux',
+                  getHighEntropyValues: async () => ({{
+                    architecture: 'x86',
+                    bitness: '64',
+                    brands: [
+                      {{brand: 'Chromium', version: {json.dumps(chrome_major_version)}}},
+                      {{brand: 'Not.A/Brand', version: '8'}},
+                    ],
+                    fullVersionList: [
+                      {{brand: 'Chromium', version: {json.dumps(chrome_ua_version)}}},
+                      {{brand: 'Not.A/Brand', version: '8.0.0.0'}},
+                    ],
+                    mobile: false,
+                    model: '',
+                    platform: 'Linux',
+                    platformVersion: '6.0.0',
+                    uaFullVersion: {json.dumps(chrome_ua_version)},
+                  }}),
+                  toJSON: () => ({{
+                    brands: [
+                      {{brand: 'Chromium', version: {json.dumps(chrome_major_version)}}},
+                      {{brand: 'Not.A/Brand', version: '8'}},
+                    ],
+                    mobile: false,
+                    platform: 'Linux',
+                  }}),
+                }}),
+              }});
+            }}
+            """
+        context.add_init_script(init_script)
 
         page = context.new_page()
 

@@ -20,7 +20,7 @@ while the skill only exposes thin entrypoint scripts.
 The project keeps one shared codebase for Windows and Ubuntu/WSL. Host-specific behavior is selected at runtime with `PRICE_ALERT_RUNTIME=auto` by default.
 
 - Windows keeps the default WhatsApp profile under `%LOCALAPPDATA%\price-alert-skill\whatsapp_chrome_profile`.
-- Linux/WSL uses the skill data directory under `data/whatsapp_session/linux_chrome_profile`.
+- Linux/WSL reuses the legacy `data/whatsapp_session/chrome_profile` when it exists, preserving existing sessions; otherwise it creates `data/whatsapp_session/linux_chrome_profile`.
 - `WHATSAPP_CHROME_PATH` and `WHATSAPP_PROFILE_DIR` always override auto-detection.
 
 ## Ubuntu/WSL

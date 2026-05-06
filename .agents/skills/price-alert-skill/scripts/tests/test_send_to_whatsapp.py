@@ -21,6 +21,7 @@ from price_alert_skill import send_to_whatsapp
 from price_alert_skill.send_to_whatsapp import (
     _download_image,
     _ensure_logged_in,
+    _get_whatsapp_state,
     _is_logged_in,
     _reset_whatsapp_session,
     _send_image_with_caption,
@@ -139,6 +140,36 @@ class TestIsLoggedIn:
 
         assert _is_logged_in(page) is False
 
+    def test_loading_chats_state_detected(self):
+        page = MagicMock()
+        page.url = "https://web.whatsapp.com/"
+
+        def locator_side_effect(selector):
+            locator = MagicMock()
+            locator.first.is_visible.return_value = False
+            if selector == "body":
+                locator.inner_text.return_value = "Carregando suas conversas"
+            return locator
+
+        page.locator.side_effect = locator_side_effect
+
+        assert _get_whatsapp_state(page) == "loading_chats"
+
+    def test_unsupported_browser_state_detected(self):
+        page = MagicMock()
+        page.url = "https://web.whatsapp.com/"
+
+        def locator_side_effect(selector):
+            locator = MagicMock()
+            locator.first.is_visible.return_value = False
+            if selector == "body":
+                locator.inner_text.return_value = "WhatsApp works with Google Chrome 85+"
+            return locator
+
+        page.locator.side_effect = locator_side_effect
+
+        assert _get_whatsapp_state(page) == "unsupported_browser"
+
 
 class TestEnsureLoggedIn:
     """Tests for _ensure_logged_in session waiting logic."""
@@ -163,6 +194,37 @@ class TestEnsureLoggedIn:
 
         with pytest.raises(RuntimeError, match="Not logged in"):
             _ensure_logged_in(page, headed=False, timeout_ms=10000)
+
+    @patch("price_alert_skill.send_to_whatsapp._capture_whatsapp_debug_artifacts")
+    @patch("price_alert_skill.send_to_whatsapp._get_whatsapp_state")
+    def test_non_headed_refreshes_once_when_chats_keep_loading(
+        self,
+        mock_state,
+        mock_capture_debug,
+        monkeypatch,
+    ):
+        page = MagicMock()
+        page.url = "https://web.whatsapp.com/"
+        page.wait_for_load_state.return_value = None
+        now = [0.0]
+
+        def sleep_side_effect(seconds):
+            now[0] += max(float(seconds), 61.0)
+
+        monkeypatch.setattr(send_to_whatsapp.time, "time", lambda: now[0])
+        monkeypatch.setattr(send_to_whatsapp.time, "sleep", sleep_side_effect)
+        mock_state.side_effect = [
+            "loading",
+            "loading_chats",
+            "loading_chats",
+            "loading_chats",
+            "logged_in",
+        ]
+
+        _ensure_logged_in(page, headed=False, timeout_ms=300000)
+
+        page.reload.assert_called_once_with(wait_until="domcontentloaded", timeout=60000)
+        mock_capture_debug.assert_called_once()
 
     def test_logged_in_query_raises(self):
         page = MagicMock()
@@ -242,6 +304,8 @@ class TestOpenWhatsAppSession:
 
         launch_kwargs = mock_playwright.chromium.launch_persistent_context.call_args.kwargs
         assert launch_kwargs["user_data_dir"] == str(profile_dir)
+        assert "HeadlessChrome" not in launch_kwargs["user_agent"]
+        assert launch_kwargs["extra_http_headers"]["sec-ch-ua-platform"] == '"Linux"'
         assert profile_dir.exists()
 
     def test_reset_session_removes_only_resolved_profile(self, tmp_path):

@@ -104,11 +104,22 @@ def test_config_profile_override_wins(monkeypatch) -> None:
     assert config.resolve_whatsapp_profile_dir() == "/tmp/custom-profile"
 
 
-def test_config_uses_linux_profile_for_linux_runtime(monkeypatch) -> None:
+def test_config_uses_linux_profile_for_linux_runtime(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "WHATSAPP_PROFILE_DIR", "")
     monkeypatch.setattr(config, "PRICE_ALERT_RUNTIME", "linux")
+    monkeypatch.setattr(config, "resolve_skill_root", lambda: tmp_path)
 
     assert Path(config.resolve_whatsapp_profile_dir()).name == "linux_chrome_profile"
+
+
+def test_config_reuses_existing_legacy_linux_profile(monkeypatch, tmp_path) -> None:
+    legacy_profile = tmp_path / "data" / "whatsapp_session" / "chrome_profile"
+    legacy_profile.mkdir(parents=True)
+    monkeypatch.setattr(config, "WHATSAPP_PROFILE_DIR", "")
+    monkeypatch.setattr(config, "PRICE_ALERT_RUNTIME", "linux")
+    monkeypatch.setattr(config, "resolve_skill_root", lambda: tmp_path)
+
+    assert Path(config.resolve_whatsapp_profile_dir()) == legacy_profile
 
 
 def test_config_uses_local_app_data_profile_for_windows_runtime(monkeypatch) -> None:

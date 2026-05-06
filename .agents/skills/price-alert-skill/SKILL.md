@@ -152,7 +152,7 @@ cd .agents/skills/price-alert-skill
 ./setup_ubuntu.sh
 ```
 
-O runtime `auto` detecta WSL como Linux e usa perfil proprio em `data/whatsapp_session/linux_chrome_profile`, separado do perfil Windows.
+O runtime `auto` detecta WSL como Linux e reaproveita `data/whatsapp_session/chrome_profile` quando ele existir, preservando sessoes antigas; se nao existir, cria `data/whatsapp_session/linux_chrome_profile`, sempre separado do perfil Windows.
 
 ## Comandos uteis
 
