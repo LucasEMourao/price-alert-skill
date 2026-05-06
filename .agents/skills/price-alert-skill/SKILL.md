@@ -134,6 +134,9 @@ Se um novo agente assumir a conversa daqui:
 - `WHATSAPP_GROUP` - grupo padrao de envio
 - `ML_PROXY` - proxy opcional
 - `ML_AFFILIATE_EMAIL` e `ML_AFFILIATE_PASSWORD` - mantidas para referencia do fluxo de afiliados
+- `PRICE_ALERT_RUNTIME` - `auto`, `windows` ou `linux`; em WSL o padrao `auto` resolve como Linux
+- `WHATSAPP_CHROME_PATH` - override opcional do executavel Chrome/Chromium
+- `WHATSAPP_PROFILE_DIR` - override opcional do perfil persistente do WhatsApp Web
 
 ## Instalacao
 
@@ -141,6 +144,15 @@ Se um novo agente assumir a conversa daqui:
 pip install -r requirements.txt
 playwright install chromium
 ```
+
+### Ubuntu/WSL
+
+```bash
+cd .agents/skills/price-alert-skill
+./setup_ubuntu.sh
+```
+
+O runtime `auto` detecta WSL como Linux e usa perfil proprio em `data/whatsapp_session/linux_chrome_profile`, separado do perfil Windows.
 
 ## Comandos uteis
 
@@ -159,6 +171,12 @@ python3 scripts/sender_worker.py --continuous
 
 # Sender continuo com navegador visivel
 python3 scripts/sender_worker.py --continuous --headed
+
+# Wrappers Ubuntu/WSL
+./run_scan.sh
+./run_sender.sh --group "$WHATSAPP_GROUP"
+./run_sender.sh --headed --group "$WHATSAPP_GROUP"
+./stop_sender.sh
 
 # Drenagem pontual
 python3 scripts/dispatch_pending_deals.py --max-messages 4
@@ -266,3 +284,22 @@ Resumo operacional:
 - documentacao de reinstalacao das tasks e launchers curtos
 - avaliar persistencia mais robusta se o volume crescer
 - blindagem contra suspensao/hibernacao do Windows durante a janela operacional
+
+
+## Automacao Ubuntu/WSL
+
+Wrappers reais no repositorio:
+
+- `setup_ubuntu.sh`
+- `run_scan.sh`
+- `run_sender.sh`
+- `run_hourly.sh`
+- `stop_sender.sh`
+
+Resumo operacional:
+
+- `setup_ubuntu.sh` cria a `.venv` do skill, instala o pacote repo-level em modo editable e baixa o Chromium do Playwright
+- `run_scan.sh` executa um scan one-shot em modo `--scan-only` e grava em `logs/scan-YYYY-MM-DD.log`
+- `run_sender.sh` supervisiona o sender continuo no WSL e grava em `logs/sender-YYYY-MM-DD.log`
+- `stop_sender.sh` cria `data/sender_stop.request`, espera parada graciosa e aplica fallback se necessario
+- para o primeiro login visivel do WhatsApp no WSLg, rode `./run_sender.sh --headed --group "$WHATSAPP_GROUP"` quando houver oferta na fila
