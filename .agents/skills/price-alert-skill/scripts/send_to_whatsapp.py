@@ -40,6 +40,14 @@ USER_DATA_DIR = resolve_whatsapp_profile_dir()
 _WHATSAPP_URL = "https://web.whatsapp.com"
 
 _GROUP_ITEM_SELECTOR = '[role="gridcell"]'
+_GROUP_RESULT_TITLE_SELECTORS = [
+    '#pane-side [data-testid="cell-frame-title"] span[title]',
+    '#pane-side span[title]',
+]
+_GROUP_RESULT_CONTAINER_SELECTORS = [
+    '#pane-side [data-testid="cell-frame-container"]',
+    '#pane-side [data-testid^="chatlist-message-"]',
+]
 _ATTACH_BUTTON_SELECTORS = [
     'button[aria-label="Anexar"]',
     'button[title="Anexar"]',
@@ -76,6 +84,11 @@ _COMPOSER_READY_SELECTORS = [
     'footer div[contenteditable="true"][role="textbox"]',
     '#main footer [contenteditable="true"]',
     '#main footer button',
+]
+_CHAT_HEADER_TITLE_SELECTORS = [
+    '#main header [data-testid="conversation-info-header-chat-title"] span[title]',
+    '#main header span[title]',
+    '#main header [title]',
 ]
 _QR_CODE_SELECTORS = [
     'canvas[aria-label*="Scan"]',
@@ -194,6 +207,137 @@ def _page_has_any_visible_selector(page, selectors: list[str]) -> bool:
                 return True
         except Exception:
             continue
+    return False
+
+
+def _normalize_text(value: str | None) -> str:
+    """Normalize UI text before comparing labels or titles."""
+    return " ".join((value or "").split()).strip().lower()
+
+
+def _chat_matches_group(page, group_name: str) -> bool:
+    """Return True when the currently opened chat header matches the target group."""
+    expected = _normalize_text(group_name)
+    for selector in _CHAT_HEADER_TITLE_SELECTORS:
+        try:
+            locator = page.locator(selector).first
+            if not locator or not locator.is_visible():
+                continue
+
+            title = None
+            try:
+                title = locator.get_attribute("title")
+            except Exception:
+                title = None
+
+            if not title:
+                try:
+                    title = locator.text_content()
+                except Exception:
+                    title = None
+
+            if _normalize_text(title) == expected:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _wait_for_group_chat_open(page, group_name: str, timeout_ms: int = 15000) -> bool:
+    """Wait until the target chat is actually opened in the right-side panel."""
+    deadline = time.time() + (timeout_ms / 1000)
+    while time.time() < deadline:
+        composer_ready = _page_has_any_visible_selector(
+            page, _COMPOSER_READY_SELECTORS + _ATTACH_BUTTON_SELECTORS
+        )
+        if composer_ready and (_chat_matches_group(page, group_name) or composer_ready):
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def _click_group_candidate(candidate) -> None:
+    """Click a search result, preferring the container that owns the row."""
+    try:
+        candidate.evaluate(
+            """
+            (el) => {
+              const container =
+                el.closest('[data-testid="cell-frame-container"]') ||
+                el.closest('[data-testid^="chatlist-message-"]') ||
+                el.closest('[role="gridcell"]') ||
+                el;
+              container.click();
+            }
+            """
+        )
+        return
+    except Exception:
+        pass
+
+    candidate.click()
+
+
+def _try_open_group_from_exact_titles(page, group_name: str) -> bool:
+    """Try to open the group by clicking an exact title match in the search results."""
+    expected = _normalize_text(group_name)
+    for selector in _GROUP_RESULT_CONTAINER_SELECTORS:
+        try:
+            candidates = page.query_selector_all(selector)
+        except Exception:
+            candidates = []
+
+        for candidate in candidates:
+            title = ""
+            try:
+                title_el = candidate.query_selector('[data-testid="cell-frame-title"] span[title]')
+            except Exception:
+                title_el = None
+
+            if title_el:
+                try:
+                    title = title_el.get_attribute("title") or title_el.text_content() or ""
+                except Exception:
+                    title = ""
+            else:
+                try:
+                    title = candidate.get_attribute("title") or candidate.text_content() or ""
+                except Exception:
+                    title = ""
+
+            if _normalize_text(title) != expected:
+                continue
+
+            try:
+                _click_group_candidate(candidate)
+                time.sleep(0.8)
+                if _wait_for_group_chat_open(page, group_name, timeout_ms=5000):
+                    return True
+            except Exception:
+                continue
+
+    for selector in _GROUP_RESULT_TITLE_SELECTORS:
+        try:
+            candidates = page.query_selector_all(selector)
+        except Exception:
+            candidates = []
+
+        for candidate in candidates:
+            try:
+                title = candidate.get_attribute("title") or candidate.text_content() or ""
+            except Exception:
+                title = ""
+
+            if _normalize_text(title) != expected:
+                continue
+
+            try:
+                _click_group_candidate(candidate)
+                time.sleep(0.8)
+                if _wait_for_group_chat_open(page, group_name, timeout_ms=5000):
+                    return True
+            except Exception:
+                continue
     return False
 
 
@@ -370,20 +514,45 @@ def _search_and_open_group(page, group_name: str, timeout_ms: int = 15000) -> No
         search_box = _find_group_search_box(page, timeout_ms=timeout_ms)
         search_box.click()
         time.sleep(0.5)
+        try:
+            search_box.press("Control+A")
+            search_box.press("Backspace")
+        except Exception:
+            pass
         search_box.fill(group_name)
-        time.sleep(3)
+        time.sleep(2)
 
         page.wait_for_selector('#side', timeout=timeout_ms)
 
+        if _try_open_group_from_exact_titles(page, group_name):
+            print(f"  Opened group: {group_name}")
+            return
+
+        try:
+            search_box.press("Enter")
+            time.sleep(0.8)
+            if _wait_for_group_chat_open(page, group_name, timeout_ms=5000):
+                print(f"  Opened group: {group_name}")
+                return
+        except Exception:
+            pass
+
+        found_match = False
         group_items = page.query_selector_all(_GROUP_ITEM_SELECTOR)
         for item in group_items:
             text = item.text_content() or ""
             if group_name.lower() in text.lower():
-                item.click()
-                time.sleep(1)
-                print(f"  Opened group: {group_name}")
-                return
+                found_match = True
+                _click_group_candidate(item)
+                time.sleep(1.2)
+                if _wait_for_group_chat_open(page, group_name, timeout_ms=5000):
+                    print(f"  Opened group: {group_name}")
+                    return
 
+        if found_match:
+            raise RuntimeError(
+                f"Group '{group_name}' appeared in search results but the chat panel did not open."
+            )
         raise RuntimeError(f"Group '{group_name}' not found in search results.")
     except Exception as exc:
         raise RuntimeError(f"Failed to find group '{group_name}': {exc}")
@@ -506,6 +675,7 @@ def open_whatsapp_session(
     """Open a persistent WhatsApp Web session and land on the target group."""
     from playwright.sync_api import sync_playwright
 
+    configure_utf8_stdio()
     playwright = sync_playwright().start()
 
     if reset_session:

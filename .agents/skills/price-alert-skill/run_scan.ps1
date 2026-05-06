@@ -5,6 +5,7 @@ $python = Join-Path $root ".venv\Scripts\python.exe"
 $script = Join-Path $root "scripts\scan_deals.py"
 $logDir = Join-Path $root "logs"
 $logFile = Join-Path $logDir ("scan-" + (Get-Date -Format "yyyy-MM-dd") + ".log")
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $arguments = @(
     "-u"
     $script
@@ -22,12 +23,17 @@ if (-not (Test-Path $python)) {
     throw "Python da venv nao encontrado em: $python"
 }
 
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+$env:PYTHONUTF8 = "1"
+
 Push-Location $root
 try {
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        & $python @arguments *>> $logFile
+        & $python @arguments 2>&1 | Out-File -FilePath $logFile -Append -Encoding utf8
         $exitCode = $LASTEXITCODE
     }
     finally {
@@ -36,13 +42,13 @@ try {
 
     if ($exitCode -ne 0) {
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        "[$timestamp] Scan process exited with code $exitCode." | Out-File -FilePath $logFile -Append
+        "[$timestamp] Scan process exited with code $exitCode." | Out-File -FilePath $logFile -Append -Encoding utf8
     }
 
     exit $exitCode
 }
 catch {
-    $_ | Out-File -FilePath $logFile -Append
+    $_ | Out-File -FilePath $logFile -Append -Encoding utf8
     exit 1
 }
 finally {

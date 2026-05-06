@@ -24,6 +24,7 @@ from send_to_whatsapp import (
     _is_logged_in,
     _send_image_with_caption,
     _search_and_open_group,
+    open_whatsapp_session,
 )
 
 
@@ -170,31 +171,69 @@ class TestEnsureLoggedIn:
         assert _is_logged_in(page) is False
 
 
+class TestOpenWhatsAppSession:
+    """Tests for session bootstrap behavior."""
+
+    @patch("playwright.sync_api.sync_playwright")
+    @patch("send_to_whatsapp._search_and_open_group")
+    @patch("send_to_whatsapp._find_group_search_box")
+    @patch("send_to_whatsapp._ensure_logged_in")
+    @patch("send_to_whatsapp._clear_stale_profile_lock_files")
+    @patch("send_to_whatsapp.configure_utf8_stdio")
+    def test_configures_utf8_stdio_before_launch(
+        self,
+        mock_configure_utf8_stdio,
+        _mock_clear_locks,
+        _mock_ensure_logged_in,
+        _mock_find_group_search_box,
+        _mock_search_and_open_group,
+        mock_sync_playwright,
+    ):
+        mock_page = MagicMock()
+        mock_context = MagicMock()
+        mock_context.new_page.return_value = mock_page
+
+        mock_playwright = MagicMock()
+        mock_playwright.chromium.launch_persistent_context.return_value = mock_context
+
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
+
+        session = open_whatsapp_session(group_name="Grupo de Teste", headed=False)
+
+        mock_configure_utf8_stdio.assert_called_once()
+        assert session["page"] is mock_page
+        assert session["context"] is mock_context
+        assert session["playwright"] is mock_playwright
+
+
 class TestSearchAndOpenGroup:
     """Tests for _search_and_open_group function."""
 
-    def test_group_found(self):
+    @patch("send_to_whatsapp._wait_for_group_chat_open", return_value=True)
+    def test_group_found(self, _mock_chat_open):
         page = MagicMock()
         search_box = MagicMock()
         page.wait_for_selector.return_value = search_box
 
         group_item = MagicMock()
-        group_item.text_content.return_value = "Grupo de Ofertas"
+        group_item.get_attribute.return_value = "Grupo de Ofertas"
         page.query_selector_all.return_value = [group_item]
 
         _search_and_open_group(page, "Grupo de Ofertas")
 
         search_box.click.assert_called()
         search_box.fill.assert_called_with("Grupo de Ofertas")
-        group_item.click.assert_called()
+        assert group_item.evaluate.called or group_item.click.called
 
-    def test_group_not_found(self):
+    @patch("send_to_whatsapp._wait_for_group_chat_open", return_value=False)
+    def test_group_not_found(self, _mock_chat_open):
         page = MagicMock()
         search_box = MagicMock()
         page.wait_for_selector.return_value = search_box
 
         group_item = MagicMock()
         group_item.get_attribute.return_value = "Outro Grupo"
+        group_item.text_content.return_value = "Outro Grupo"
         page.query_selector_all.return_value = [group_item]
 
         with pytest.raises(RuntimeError, match="not found"):
