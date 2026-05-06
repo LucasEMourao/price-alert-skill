@@ -20,6 +20,24 @@ O fluxo principal hoje e este:
 
 Nao e necessario subir servidor auxiliar para esse fluxo.
 
+## Ultimo checkpoint validado
+
+Checkpoint operacional mais recente:
+
+- sender com correcoes de UTF-8 e logging do Windows aplicadas
+- suite mais recente: `171 passed`
+- teste end-to-end real do sender:
+  - `1` oferta Amazon BR enviada com sucesso
+  - `1` oferta Mercado Livre enviada com sucesso
+- screenshot de referencia:
+  - `data/debug/e2e_verify_20260506_utf8.png`
+
+Leitura pratica:
+
+- o fluxo de mensagem `imagem + legenda + link` esta funcional
+- a legenda sai correta do scan e chega correta ao WhatsApp
+- o problema que ainda pode derrubar o dia inteiro nao e mais o sender, e sim energia/suspensao da maquina
+
 ## Plano operacional
 
 ### 1. Preparacao
@@ -179,6 +197,7 @@ Observacoes:
 
 - os timestamps desses logs estao em UTC
 - mojibake no console do Windows pode afetar a leitura visual dos caracteres, mas nao implica falha operacional por si so
+- se um log do mesmo dia misturar trechos antigos e novos em codificacoes diferentes, valide pelo comportamento real do sender, pelo JSON salvo em `data/messages/` e pela fila
 
 ```powershell
 $q = Get-Content ".\data\deal_queue.json" -Raw | ConvertFrom-Json
@@ -206,6 +225,14 @@ $q = Get-Content ".\data\deal_queue.json" -Raw | ConvertFrom-Json
 - rodar varios senders em paralelo
 - depender de servidor auxiliar para scraping
 - alterar os wrappers Windows sempre que a regra de negocio mudar
+
+## Proximo foco recomendado
+
+Depois deste checkpoint, o proximo trabalho recomendado e:
+
+1. impedir suspensao/hibernacao do Windows durante a janela operacional
+2. validar se as tasks continuam rodando com a tela desligada ou bloqueada
+3. so depois pensar em melhorias extras de throughput ou observabilidade
 
 ## Melhorias futuras desejaveis
 

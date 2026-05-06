@@ -15,6 +15,31 @@ O formato de envio mantido hoje e:
 - legenda
 - link de afiliado
 
+## Checkpoint de handoff atual
+
+Estado validado em `2026-05-06`:
+
+- branch ativa consolidada em `main`
+- ultimo commit funcional relevante: `a1f68f8` - `Fix UTF-8 handling in sender and scheduler logs`
+- suite automatizada mais recente: `171 passed`
+- validacao end-to-end real do sender: `2/2` envios bem-sucedidos
+  - `1` oferta Amazon BR
+  - `1` oferta Mercado Livre
+- evidencia visual da validacao:
+  - `data/debug/e2e_verify_20260506_utf8.png`
+
+Conclusao do checkpoint:
+
+- a legenda do WhatsApp nao estava sendo gerada errada no scan
+- o JSON do scan ja estava correto em UTF-8
+- o problema real era a camada operacional do Windows:
+  - bootstrap de UTF-8 no sender
+  - codificacao de log nos wrappers PowerShell
+
+Proximo foco pendente depois deste checkpoint:
+
+- endurecer o ambiente contra suspensao/hibernacao do Windows durante a janela operacional
+
 ## Arquitetura atual
 
 A arquitetura foi refatorada para separar regra de negocio, casos de uso e integracoes concretas.
@@ -251,10 +276,10 @@ Esses arquivos sao parte da configuracao operacional da maquina. Se o caminho do
 Comportamento dos wrappers:
 
 - `run_scan.ps1`
-  Executa um scan one-shot e encerra.
+  Executa um scan one-shot e encerra. Agora grava o log explicitamente em UTF-8.
 
 - `run_sender.ps1`
-  Mantem um loop de supervisao simples para o sender continuo e relanca o processo se ele sair sem pedido explicito de stop.
+  Mantem um loop de supervisao simples para o sender continuo e relanca o processo se ele sair sem pedido explicito de stop. Agora forca `PYTHONUTF8=1` e grava o log explicitamente em UTF-8.
 
 - `stop_sender.ps1`
   Sinaliza parada graciosa e, se necessario, faz fallback de encerramento pelo processo/lock.
@@ -299,6 +324,26 @@ python3 scripts/dispatch_pending_deals.py --max-messages 4
 
 - Os arquivos de log operacionais usam timestamp em UTC. Para comparar com o horario local de Sao Paulo, considere a conversao correspondente.
 - O terminal do Windows ainda pode exibir mojibake em alguns emojis e acentos. Isso nao significa, por si so, falha funcional do scan ou do sender.
+- Um arquivo de log do mesmo dia pode ficar "misto" se parte dele tiver sido escrita antes de um ajuste de encoding e parte depois. O indicador mais confiavel e sempre:
+  - o JSON em `data/messages/`
+  - o estado da fila em `data/deal_queue.json`
+  - a confirmacao visual no proprio WhatsApp Web
+
+## Incidentes recentes relevantes
+
+### 2026-05-03
+
+- o sender falhou no fluxo de abertura real do chat no WhatsApp Web
+- o scan ainda rodou por algumas horas
+- depois o Windows entrou em suspensao por volta de `13:03` local e interrompeu o restante da operacao
+
+### 2026-05-06
+
+- foi confirmada a cadeia correta da legenda:
+  - `utils.py` gera a mensagem corretamente
+  - `data/messages/deals_*.json` persiste corretamente em UTF-8
+  - o envio real funciona com acentos e emojis corretos
+- o problema observado pelo usuario era a camada de encoding do sender/log, nao a regra de formatacao da legenda
 
 ## Melhorias futuras registradas
 

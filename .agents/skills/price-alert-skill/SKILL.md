@@ -96,6 +96,23 @@ O bootstrap de compatibilidade fica em `scripts/config.py`, que garante o root d
 6. Deixe `scripts/sender_worker.py --continuous` consumindo a fila.
 7. As mensagens saem com imagem + legenda + link.
 
+## Handoff rapido para outro agente
+
+Estado mais importante no momento:
+
+- a arquitetura em camadas ja foi aplicada e esta em `main`
+- o sender foi corrigido para abrir o grupo corretamente e operar com UTF-8 no bootstrap
+- os wrappers `run_sender.ps1` e `run_scan.ps1` passaram a gravar logs explicitamente em UTF-8
+- o ultimo checkpoint validado teve:
+  - `171 passed`
+  - `2/2` envios reais em E2E
+  - evidencia em `data/debug/e2e_verify_20260506_utf8.png`
+
+Se um novo agente assumir a conversa daqui:
+
+- nao precisa reabrir o tema de legenda corrompida como problema do scan
+- o proximo foco mais util e energia/suspensao do Windows
+
 ## Scripts principais
 
 - `scripts/scan_deals.py` - wrapper de compatibilidade para o scan
@@ -203,6 +220,7 @@ Valores podem variar. Se entrar em estoque baixo, some rapido.
 - A fila fica em `data/deal_queue.json`.
 - O historico de cooldown fica em `data/sent_deals.json`.
 - As tasks do Windows usam launchers curtos em `C:\Users\bruno\PriceAlertTasks\`.
+- Se o nome do grupo mudar, o ajuste normal e atualizar `WHATSAPP_GROUP` no `.env` e reiniciar o sender.
 
 ## Automacao Windows
 
@@ -234,6 +252,8 @@ Resumo operacional:
 
 - os logs operacionais usam timestamps em UTC
 - o console do Windows pode mostrar caracteres corrompidos para emojis e alguns acentos; isso nao significa falha funcional automaticamente
+- o arquivo salvo em `data/messages/deals_*.json` e a melhor fonte para confirmar se a legenda gerada esta correta
+- um mesmo log diario pode ficar misto se parte do arquivo foi escrita antes de uma correcao de encoding e parte depois
 
 ## Melhorias futuras registradas
 
@@ -244,3 +264,4 @@ Resumo operacional:
 - utilitario unico de diagnostico
 - documentacao de reinstalacao das tasks e launchers curtos
 - avaliar persistencia mais robusta se o volume crescer
+- blindagem contra suspensao/hibernacao do Windows durante a janela operacional
