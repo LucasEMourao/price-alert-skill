@@ -257,6 +257,45 @@ class TestOpenWhatsAppSession:
         assert not active_profile.exists()
         assert other_profile.exists()
 
+    @patch("playwright.sync_api.sync_playwright")
+    @patch("price_alert_skill.send_to_whatsapp._search_and_open_group")
+    @patch("price_alert_skill.send_to_whatsapp._find_group_search_box")
+    @patch("price_alert_skill.send_to_whatsapp._ensure_logged_in")
+    @patch("price_alert_skill.send_to_whatsapp._clear_stale_profile_lock_files")
+    @patch("price_alert_skill.send_to_whatsapp.configure_utf8_stdio")
+    def test_closes_playwright_when_session_open_fails(
+        self,
+        _mock_configure_utf8_stdio,
+        _mock_clear_locks,
+        mock_ensure_logged_in,
+        _mock_find_group_search_box,
+        _mock_search_and_open_group,
+        mock_sync_playwright,
+        monkeypatch,
+        tmp_path,
+    ):
+        profile_dir = tmp_path / "linux_chrome_profile"
+        monkeypatch.setattr(
+            send_to_whatsapp,
+            "resolve_whatsapp_profile_dir",
+            lambda: str(profile_dir),
+        )
+
+        mock_page = MagicMock()
+        mock_context = MagicMock()
+        mock_context.new_page.return_value = mock_page
+
+        mock_playwright = MagicMock()
+        mock_playwright.chromium.launch_persistent_context.return_value = mock_context
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
+        mock_ensure_logged_in.side_effect = RuntimeError("auth failed")
+
+        with pytest.raises(RuntimeError, match="auth failed"):
+            open_whatsapp_session(group_name="Grupo de Teste", headed=False)
+
+        mock_context.close.assert_called_once()
+        mock_playwright.stop.assert_called_once()
+
 
 class TestSearchAndOpenGroup:
     """Tests for _search_and_open_group function."""

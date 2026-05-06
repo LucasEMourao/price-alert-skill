@@ -680,77 +680,83 @@ def open_whatsapp_session(
     from playwright.sync_api import sync_playwright
 
     configure_utf8_stdio()
-    playwright = sync_playwright().start()
-
-    user_data_dir = _resolve_user_data_dir()
-
-    if reset_session:
-        _reset_whatsapp_session(user_data_dir)
-
-    _clear_stale_profile_lock_files(user_data_dir)
-
-    chrome_path = resolve_whatsapp_chrome_path()
-    Path(user_data_dir).mkdir(parents=True, exist_ok=True)
-    launch_kwargs = {
-        "user_data_dir": user_data_dir,
-        "headless": not headed,
-        "viewport": {"width": 1280, "height": 720},
-        "locale": "pt-BR",
-        "timezone_id": "America/Sao_Paulo",
-        "ignore_default_args": ["--enable-automation"],
-        "args": [
-            "--disable-blink-features=AutomationControlled",
-            "--disable-dev-shm-usage",
-            "--disable-infobars",
-        ],
-    }
-    if chrome_path:
-        print(f"Using Chrome executable for WhatsApp Web: {chrome_path}")
-        launch_kwargs["executable_path"] = chrome_path
-    else:
-        print("Using Playwright Chromium for WhatsApp Web.")
-    print(f"Using WhatsApp Chrome profile dir: {user_data_dir}")
+    playwright = None
+    context = None
 
     try:
-        context = playwright.chromium.launch_persistent_context(**launch_kwargs)
-    except Exception as first_exc:
-        print(f"  WARNING: Failed to launch WhatsApp persistent context: {first_exc}")
-        print("  Retrying once after clearing stale profile files...")
+        playwright = sync_playwright().start()
+        user_data_dir = _resolve_user_data_dir()
+
+        if reset_session:
+            _reset_whatsapp_session(user_data_dir)
+
         _clear_stale_profile_lock_files(user_data_dir)
-        time.sleep(2)
-        context = playwright.chromium.launch_persistent_context(**launch_kwargs)
-    context.add_init_script(
-        """
-        Object.defineProperty(navigator, 'webdriver', {
-          get: () => undefined,
-        });
-        window.chrome = window.chrome || { runtime: {} };
-        Object.defineProperty(navigator, 'languages', {
-          get: () => ['pt-BR', 'pt', 'en-US', 'en'],
-        });
-        Object.defineProperty(navigator, 'plugins', {
-          get: () => [1, 2, 3, 4, 5],
-        });
-        """
-    )
 
-    page = context.new_page()
+        chrome_path = resolve_whatsapp_chrome_path()
+        Path(user_data_dir).mkdir(parents=True, exist_ok=True)
+        launch_kwargs = {
+            "user_data_dir": user_data_dir,
+            "headless": not headed,
+            "viewport": {"width": 1280, "height": 720},
+            "locale": "pt-BR",
+            "timezone_id": "America/Sao_Paulo",
+            "ignore_default_args": ["--enable-automation"],
+            "args": [
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--disable-infobars",
+            ],
+        }
+        if chrome_path:
+            print(f"Using Chrome executable for WhatsApp Web: {chrome_path}")
+            launch_kwargs["executable_path"] = chrome_path
+        else:
+            print("Using Playwright Chromium for WhatsApp Web.")
+        print(f"Using WhatsApp Chrome profile dir: {user_data_dir}")
 
-    print("Opening WhatsApp Web...")
-    page.goto(_WHATSAPP_URL, wait_until="domcontentloaded", timeout=60000)
+        try:
+            context = playwright.chromium.launch_persistent_context(**launch_kwargs)
+        except Exception as first_exc:
+            print(f"  WARNING: Failed to launch WhatsApp persistent context: {first_exc}")
+            print("  Retrying once after clearing stale profile files...")
+            _clear_stale_profile_lock_files(user_data_dir)
+            time.sleep(2)
+            context = playwright.chromium.launch_persistent_context(**launch_kwargs)
+        context.add_init_script(
+            """
+            Object.defineProperty(navigator, 'webdriver', {
+              get: () => undefined,
+            });
+            window.chrome = window.chrome || { runtime: {} };
+            Object.defineProperty(navigator, 'languages', {
+              get: () => ['pt-BR', 'pt', 'en-US', 'en'],
+            });
+            Object.defineProperty(navigator, 'plugins', {
+              get: () => [1, 2, 3, 4, 5],
+            });
+            """
+        )
 
-    _ensure_logged_in(page, headed=headed)
+        page = context.new_page()
 
-    print("  Waiting for app to fully load (this may take 30-60s)...")
-    try:
-        _find_group_search_box(page, timeout_ms=60000)
-        print("  App loaded successfully!")
+        print("Opening WhatsApp Web...")
+        page.goto(_WHATSAPP_URL, wait_until="domcontentloaded", timeout=60000)
+
+        _ensure_logged_in(page, headed=headed)
+
+        print("  Waiting for app to fully load (this may take 30-60s)...")
+        try:
+            _find_group_search_box(page, timeout_ms=60000)
+            print("  App loaded successfully!")
+        except Exception:
+            print("  WARNING: Search input did not appear, trying to continue anyway...")
+            time.sleep(15)
+
+        _search_and_open_group(page, group_name)
+        return {"playwright": playwright, "context": context, "page": page}
     except Exception:
-        print("  WARNING: Search input did not appear, trying to continue anyway...")
-        time.sleep(15)
-
-    _search_and_open_group(page, group_name)
-    return {"playwright": playwright, "context": context, "page": page}
+        close_whatsapp_session({"playwright": playwright, "context": context})
+        raise
 
 
 def close_whatsapp_session(session: dict[str, Any] | None) -> None:
