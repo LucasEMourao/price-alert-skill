@@ -2,11 +2,11 @@
 
 from unittest.mock import patch
 
-from dispatch_pending_deals import dispatch_pending_deals
+from price_alert_skill.dispatch_pending_deals import dispatch_pending_deals
 
 
 @patch(
-    "dispatch_pending_deals.run_sender",
+    "price_alert_skill.dispatch_pending_deals.run_sender",
     return_value={"sent": 3, "failed": 1, "errors": [], "skipped_due_to_lock": False},
 )
 def test_dispatch_pending_deals_delegates_to_sender(mock_run_sender):

@@ -1,6 +1,6 @@
 """Tests for the new pure domain models."""
 
-from core.domain.models import Deal, QueueItem
+from price_alert_skill.core.domain.models import Deal, QueueItem
 
 
 def test_deal_from_mapping_keeps_core_fields_and_extra_metadata():

@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from core.domain.queue_policy import (
+from price_alert_skill.core.domain.queue_policy import (
     POOL_KEYS,
     begin_scan_run,
     default_queue,

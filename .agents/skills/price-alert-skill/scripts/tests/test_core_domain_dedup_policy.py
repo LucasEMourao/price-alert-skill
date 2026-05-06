@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from core.domain.dedup_policy import (
+from price_alert_skill.core.domain.dedup_policy import (
     build_sent_record,
     can_send_again,
     clean_old_deals,

@@ -3,10 +3,10 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from core.adapters.json_queue_repository import JSONQueueRepository
-from core.adapters.json_sent_deals_repository import JSONSentDealsRepository
-from core.ports.queue_repository import QueueRepository
-from core.ports.sent_deals_repository import SentDealsRepository
+from price_alert_skill.core.adapters.json_queue_repository import JSONQueueRepository
+from price_alert_skill.core.adapters.json_sent_deals_repository import JSONSentDealsRepository
+from price_alert_skill.core.ports.queue_repository import QueueRepository
+from price_alert_skill.core.ports.sent_deals_repository import SentDealsRepository
 
 
 def test_json_queue_repository_is_port_compatible(tmp_path):

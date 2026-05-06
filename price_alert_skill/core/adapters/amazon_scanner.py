@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import fetch_amazon_br as amazon_impl
+from price_alert_skill import fetch_amazon_br as amazon_impl
 
 
 class AmazonMarketplaceScanner:

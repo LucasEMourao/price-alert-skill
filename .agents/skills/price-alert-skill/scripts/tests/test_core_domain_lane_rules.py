@@ -1,6 +1,6 @@
 """Tests for the extracted domain lane rules."""
 
-from core.domain.lane_rules import (
+from price_alert_skill.core.domain.lane_rules import (
     classify_deal_lane,
     passes_quality_filters,
     qualifies_urgent,

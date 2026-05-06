@@ -13,9 +13,9 @@ Buscar ofertas em marketplaces brasileiros, gerar links de afiliado, alimentar u
 O fluxo principal hoje e este:
 
 1. `scripts/scan_deals.py --scan-only` faz a coleta e popula a fila.
-2. `core/domain/` aplica classificacao, ranking, dedup e politica de fila.
-3. `core/application/` orquestra o scan e o sender.
-4. `core/adapters/` implementa persistencia JSON, scanners, `meli.la` e WhatsApp.
+2. `price_alert_skill/core/domain/` aplica classificacao, ranking, dedup e politica de fila.
+3. `price_alert_skill/core/application/` orquestra o scan e o sender.
+4. `price_alert_skill/core/adapters/` implementa persistencia JSON, scanners, `meli.la` e WhatsApp.
 5. `scripts/sender_worker.py --continuous` envia uma mensagem por vez para o WhatsApp.
 
 Nao e necessario subir servidor auxiliar para esse fluxo.
@@ -118,7 +118,7 @@ Comportamento esperado:
 
 #### Dominio
 
-Local: `core/domain/`
+Local: `price_alert_skill/core/domain/`
 
 Concentra:
 - lane rules
@@ -129,7 +129,7 @@ Concentra:
 
 #### Aplicacao
 
-Local: `core/application/`
+Local: `price_alert_skill/core/application/`
 
 Concentra:
 - `scan_use_case.py`
@@ -137,7 +137,7 @@ Concentra:
 
 #### Ports
 
-Local: `core/ports/`
+Local: `price_alert_skill/core/ports/`
 
 Concentra:
 - contratos para fila
@@ -148,7 +148,7 @@ Concentra:
 
 #### Adapters
 
-Local: `core/adapters/`
+Local: `price_alert_skill/core/adapters/`
 
 Concentra:
 - JSON repositories
@@ -158,7 +158,7 @@ Concentra:
 
 #### Entrypoints
 
-Local: `core/entrypoints/`
+Local: `price_alert_skill/core/entrypoints/`
 
 Concentra:
 - CLI de scan
@@ -169,7 +169,7 @@ Concentra:
 
 Local: `scripts/`
 
-Os scripts antigos continuam existindo, mas agora devem ser tratados como wrappers finos sobre a arquitetura nova.
+Os scripts antigos continuam existindo, mas agora devem ser tratados como wrappers finos sobre a arquitetura nova. O bootstrap deles fica em `scripts/_package_bootstrap.py`, que aponta para o pacote repo-level `price_alert_skill/`.
 
 ### 8. Monitoracao diaria
 

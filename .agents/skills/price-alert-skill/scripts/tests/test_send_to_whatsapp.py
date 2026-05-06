@@ -16,9 +16,9 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import config
-import send_to_whatsapp
-from send_to_whatsapp import (
+import price_alert_skill.config as config
+from price_alert_skill import send_to_whatsapp
+from price_alert_skill.send_to_whatsapp import (
     _download_image,
     _ensure_logged_in,
     _is_logged_in,
@@ -31,7 +31,7 @@ from send_to_whatsapp import (
 class TestDownloadImage:
     """Tests for _download_image function."""
 
-    @patch("send_to_whatsapp.requests.get")
+    @patch("price_alert_skill.send_to_whatsapp.requests.get")
     def test_download_image_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -46,7 +46,7 @@ class TestDownloadImage:
         assert Path(result).exists()
         Path(result).unlink()
 
-    @patch("send_to_whatsapp.requests.get")
+    @patch("price_alert_skill.send_to_whatsapp.requests.get")
     def test_download_image_png(self, mock_get):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -60,7 +60,7 @@ class TestDownloadImage:
         assert result.endswith(".png")
         Path(result).unlink()
 
-    @patch("send_to_whatsapp.requests.get")
+    @patch("price_alert_skill.send_to_whatsapp.requests.get")
     def test_download_image_no_extension_defaults_to_jpg(self, mock_get):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -74,7 +74,7 @@ class TestDownloadImage:
         assert result.endswith(".jpg")
         Path(result).unlink()
 
-    @patch("send_to_whatsapp.requests.get")
+    @patch("price_alert_skill.send_to_whatsapp.requests.get")
     def test_download_image_http_error(self, mock_get):
         import requests as req
 
@@ -84,7 +84,7 @@ class TestDownloadImage:
 
         assert result is None
 
-    @patch("send_to_whatsapp.requests.get")
+    @patch("price_alert_skill.send_to_whatsapp.requests.get")
     def test_download_image_timeout(self, mock_get):
         import requests as req
 
@@ -94,7 +94,7 @@ class TestDownloadImage:
 
         assert result is None
 
-    @patch("send_to_whatsapp.requests.get")
+    @patch("price_alert_skill.send_to_whatsapp.requests.get")
     def test_download_image_webp(self, mock_get):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -142,8 +142,8 @@ class TestIsLoggedIn:
 class TestEnsureLoggedIn:
     """Tests for _ensure_logged_in session waiting logic."""
 
-    @patch("send_to_whatsapp.time.sleep", return_value=None)
-    @patch("send_to_whatsapp._get_whatsapp_state")
+    @patch("price_alert_skill.send_to_whatsapp.time.sleep", return_value=None)
+    @patch("price_alert_skill.send_to_whatsapp._get_whatsapp_state")
     def test_non_headed_waits_for_existing_session(self, mock_state, _mock_sleep):
         page = MagicMock()
         page.url = "https://web.whatsapp.com/"
@@ -152,8 +152,8 @@ class TestEnsureLoggedIn:
 
         _ensure_logged_in(page, headed=False, timeout_ms=10000)
 
-    @patch("send_to_whatsapp.time.sleep", return_value=None)
-    @patch("send_to_whatsapp._get_whatsapp_state")
+    @patch("price_alert_skill.send_to_whatsapp.time.sleep", return_value=None)
+    @patch("price_alert_skill.send_to_whatsapp._get_whatsapp_state")
     def test_non_headed_raises_when_session_is_gone(self, mock_state, _mock_sleep):
         page = MagicMock()
         page.url = "https://web.whatsapp.com/"
@@ -175,11 +175,11 @@ class TestOpenWhatsAppSession:
     """Tests for session bootstrap behavior."""
 
     @patch("playwright.sync_api.sync_playwright")
-    @patch("send_to_whatsapp._search_and_open_group")
-    @patch("send_to_whatsapp._find_group_search_box")
-    @patch("send_to_whatsapp._ensure_logged_in")
-    @patch("send_to_whatsapp._clear_stale_profile_lock_files")
-    @patch("send_to_whatsapp.configure_utf8_stdio")
+    @patch("price_alert_skill.send_to_whatsapp._search_and_open_group")
+    @patch("price_alert_skill.send_to_whatsapp._find_group_search_box")
+    @patch("price_alert_skill.send_to_whatsapp._ensure_logged_in")
+    @patch("price_alert_skill.send_to_whatsapp._clear_stale_profile_lock_files")
+    @patch("price_alert_skill.send_to_whatsapp.configure_utf8_stdio")
     def test_configures_utf8_stdio_before_launch(
         self,
         mock_configure_utf8_stdio,
@@ -209,7 +209,7 @@ class TestOpenWhatsAppSession:
 class TestSearchAndOpenGroup:
     """Tests for _search_and_open_group function."""
 
-    @patch("send_to_whatsapp._wait_for_group_chat_open", return_value=True)
+    @patch("price_alert_skill.send_to_whatsapp._wait_for_group_chat_open", return_value=True)
     def test_group_found(self, _mock_chat_open):
         page = MagicMock()
         search_box = MagicMock()
@@ -225,7 +225,7 @@ class TestSearchAndOpenGroup:
         search_box.fill.assert_called_with("Grupo de Ofertas")
         assert group_item.evaluate.called or group_item.click.called
 
-    @patch("send_to_whatsapp._wait_for_group_chat_open", return_value=False)
+    @patch("price_alert_skill.send_to_whatsapp._wait_for_group_chat_open", return_value=False)
     def test_group_not_found(self, _mock_chat_open):
         page = MagicMock()
         search_box = MagicMock()
@@ -348,7 +348,7 @@ class TestSendDealsIntegration:
 
     @patch("playwright.sync_api.sync_playwright")
     def test_send_deals_all_succeed(self, mock_playwright):
-        from send_to_whatsapp import send_deals_to_whatsapp
+        from price_alert_skill.send_to_whatsapp import send_deals_to_whatsapp
 
         mock_page = MagicMock()
         mock_context = MagicMock()
@@ -369,10 +369,10 @@ class TestSendDealsIntegration:
             }
         ]
 
-        with patch("send_to_whatsapp._download_image") as mock_dl, \
-             patch("send_to_whatsapp._send_image_with_caption", return_value=True), \
-             patch("send_to_whatsapp._search_and_open_group"), \
-             patch("send_to_whatsapp._ensure_logged_in"):
+        with patch("price_alert_skill.send_to_whatsapp._download_image") as mock_dl, \
+             patch("price_alert_skill.send_to_whatsapp._send_image_with_caption", return_value=True), \
+             patch("price_alert_skill.send_to_whatsapp._search_and_open_group"), \
+             patch("price_alert_skill.send_to_whatsapp._ensure_logged_in"):
             mock_dl.return_value = "/tmp/test.jpg"
 
             results = send_deals_to_whatsapp(
@@ -387,7 +387,7 @@ class TestSendDealsIntegration:
 
     @patch("playwright.sync_api.sync_playwright")
     def test_send_deals_no_image_url(self, mock_playwright):
-        from send_to_whatsapp import send_deals_to_whatsapp
+        from price_alert_skill.send_to_whatsapp import send_deals_to_whatsapp
 
         mock_page = MagicMock()
         mock_context = MagicMock()
@@ -408,8 +408,8 @@ class TestSendDealsIntegration:
             }
         ]
 
-        with patch("send_to_whatsapp._search_and_open_group"), \
-             patch("send_to_whatsapp._ensure_logged_in"):
+        with patch("price_alert_skill.send_to_whatsapp._search_and_open_group"), \
+             patch("price_alert_skill.send_to_whatsapp._ensure_logged_in"):
             results = send_deals_to_whatsapp(
                 deals=deals,
                 group_name="Test Group",
@@ -425,7 +425,7 @@ class TestSendDealsIntegration:
 class TestCliGroupResolution:
     """Tests for CLI fallback to WHATSAPP_GROUP from .env."""
 
-    @patch("send_to_whatsapp.send_deals_to_whatsapp", return_value={"sent": 1, "failed": 0, "errors": []})
+    @patch("price_alert_skill.send_to_whatsapp.send_deals_to_whatsapp", return_value={"sent": 1, "failed": 0, "errors": []})
     def test_main_uses_env_group_when_group_flag_is_missing(self, mock_send, monkeypatch, tmp_path):
         deals_path = tmp_path / "deals.json"
         deals_path.write_text(json.dumps({
@@ -444,7 +444,7 @@ class TestCliGroupResolution:
 
         assert mock_send.call_args.kwargs["group_name"] == "Grupo via Env"
 
-    @patch("send_to_whatsapp.send_deals_to_whatsapp", return_value={"sent": 1, "failed": 0, "errors": []})
+    @patch("price_alert_skill.send_to_whatsapp.send_deals_to_whatsapp", return_value={"sent": 1, "failed": 0, "errors": []})
     def test_main_prefers_cli_group_over_env(self, mock_send, monkeypatch, tmp_path):
         deals_path = tmp_path / "deals.json"
         deals_path.write_text(json.dumps({

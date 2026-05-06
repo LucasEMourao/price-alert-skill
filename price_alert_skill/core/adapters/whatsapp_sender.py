@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import send_to_whatsapp as whatsapp_impl
+from price_alert_skill import send_to_whatsapp as whatsapp_impl
 
 
 class WhatsAppBatchSender:

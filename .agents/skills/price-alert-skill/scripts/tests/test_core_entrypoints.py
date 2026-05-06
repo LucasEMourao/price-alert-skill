@@ -7,8 +7,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.entrypoints.dispatch_cli import main as dispatch_cli_main
-from core.entrypoints.sender_cli import main as sender_cli_main
+from price_alert_skill.core.entrypoints.dispatch_cli import main as dispatch_cli_main
+from price_alert_skill.core.entrypoints.sender_cli import main as sender_cli_main
 
 
 def test_sender_cli_invokes_run_sender(monkeypatch):

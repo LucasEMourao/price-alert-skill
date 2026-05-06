@@ -6,15 +6,15 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.adapters.amazon_scanner import AmazonMarketplaceScanner
-from core.adapters.mercadolivre_scanner import MercadoLivreMarketplaceScanner
-from core.ports.scanner import MarketplaceRunner
+from price_alert_skill.core.adapters.amazon_scanner import AmazonMarketplaceScanner
+from price_alert_skill.core.adapters.mercadolivre_scanner import MercadoLivreMarketplaceScanner
+from price_alert_skill.core.ports.scanner import MarketplaceRunner
 
 
 def test_amazon_marketplace_scanner_is_port_compatible(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        "core.adapters.amazon_scanner.amazon_impl.run",
+        "price_alert_skill.core.adapters.amazon_scanner.amazon_impl.run",
         lambda *, query, max_results: calls.append((query, max_results)) or {"products": []},
     )
 
@@ -28,7 +28,7 @@ def test_amazon_marketplace_scanner_is_port_compatible(monkeypatch):
 def test_mercadolivre_marketplace_scanner_is_port_compatible(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        "core.adapters.mercadolivre_scanner.mercadolivre_impl.run",
+        "price_alert_skill.core.adapters.mercadolivre_scanner.mercadolivre_impl.run",
         lambda *, query, max_results: calls.append((query, max_results)) or {"products": []},
     )
 

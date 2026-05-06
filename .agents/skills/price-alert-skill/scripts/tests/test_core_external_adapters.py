@@ -6,15 +6,15 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.adapters.meli_affiliate_links import MeliAffiliateLinkGenerator
-from core.adapters.whatsapp_sender import (
+from price_alert_skill.core.adapters.meli_affiliate_links import MeliAffiliateLinkGenerator
+from price_alert_skill.core.adapters.whatsapp_sender import (
     WhatsAppBatchSender,
     WhatsAppDealChatSenderAdapter,
     WhatsAppSessionCloserAdapter,
     WhatsAppSessionOpenerAdapter,
 )
-from core.ports.affiliate_links import AffiliateLinkGenerator
-from core.ports.message_sender import (
+from price_alert_skill.core.ports.affiliate_links import AffiliateLinkGenerator
+from price_alert_skill.core.ports.message_sender import (
     BatchWhatsAppSender,
     DealChatSender,
     WhatsAppSessionCloser,
@@ -24,7 +24,7 @@ from core.ports.message_sender import (
 
 def test_meli_affiliate_link_generator_is_port_compatible(monkeypatch):
     monkeypatch.setattr(
-        "core.adapters.meli_affiliate_links.melila_impl.generate_links",
+        "price_alert_skill.core.adapters.meli_affiliate_links.melila_impl.generate_links",
         lambda urls: {url: f"https://meli.la/{index}" for index, url in enumerate(urls, start=1)},
     )
 
@@ -43,19 +43,19 @@ def test_whatsapp_sender_adapters_are_port_compatible(monkeypatch):
     chat_calls = []
 
     monkeypatch.setattr(
-        "core.adapters.whatsapp_sender.whatsapp_impl.send_deals_to_whatsapp",
+        "price_alert_skill.core.adapters.whatsapp_sender.whatsapp_impl.send_deals_to_whatsapp",
         lambda **kwargs: batch_calls.append(kwargs) or {"sent": 1, "failed": 0, "errors": []},
     )
     monkeypatch.setattr(
-        "core.adapters.whatsapp_sender.whatsapp_impl.open_whatsapp_session",
+        "price_alert_skill.core.adapters.whatsapp_sender.whatsapp_impl.open_whatsapp_session",
         lambda **kwargs: opener_calls.append(kwargs) or {"page": object()},
     )
     monkeypatch.setattr(
-        "core.adapters.whatsapp_sender.whatsapp_impl.close_whatsapp_session",
+        "price_alert_skill.core.adapters.whatsapp_sender.whatsapp_impl.close_whatsapp_session",
         lambda session: closer_calls.append(session),
     )
     monkeypatch.setattr(
-        "core.adapters.whatsapp_sender.whatsapp_impl.send_deal_in_open_chat",
+        "price_alert_skill.core.adapters.whatsapp_sender.whatsapp_impl.send_deal_in_open_chat",
         lambda page, deal, *, delay_between, max_retries: chat_calls.append(
             {
                 "page": page,

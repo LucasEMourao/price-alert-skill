@@ -1,8 +1,8 @@
 """Structural protocol tests for the new application ports."""
 
-from core.ports.affiliate_links import AffiliateLinkGenerator
-from core.ports.clock import Clock, Sleeper
-from core.ports.message_sender import (
+from price_alert_skill.core.ports.affiliate_links import AffiliateLinkGenerator
+from price_alert_skill.core.ports.clock import Clock, Sleeper
+from price_alert_skill.core.ports.message_sender import (
     BatchWhatsAppSender,
     DealChatSender,
     Logger,
@@ -10,9 +10,9 @@ from core.ports.message_sender import (
     WhatsAppSessionCloser,
     WhatsAppSessionOpener,
 )
-from core.ports.queue_repository import QueueRepository
-from core.ports.scanner import DiscountCalculator, MarketplaceRunner
-from core.ports.sent_deals_repository import SentDealsRepository
+from price_alert_skill.core.ports.queue_repository import QueueRepository
+from price_alert_skill.core.ports.scanner import DiscountCalculator, MarketplaceRunner
+from price_alert_skill.core.ports.sent_deals_repository import SentDealsRepository
 
 
 class _FakeQueueRepository:

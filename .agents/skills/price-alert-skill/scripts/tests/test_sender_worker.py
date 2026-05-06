@@ -3,8 +3,13 @@
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from deal_selection import prepare_deal_for_selection
-from sender_worker import _acquire_sender_lock, _release_sender_lock, _select_next_deal, run_sender
+from price_alert_skill.deal_selection import prepare_deal_for_selection
+from price_alert_skill.sender_worker import (
+    _acquire_sender_lock,
+    _release_sender_lock,
+    _select_next_deal,
+    run_sender,
+)
 
 
 def _deal(**overrides):
@@ -58,8 +63,8 @@ def test_select_next_deal_prefers_urgent_without_advancing_ratio():
 def test_acquire_sender_lock_replaces_orphan_lock(tmp_path, monkeypatch):
     lock_file = tmp_path / "sender_worker.lock"
     lock_file.write_text("pid=999999 started_at=2026-04-28T18:27:56+00:00", encoding="utf-8")
-    monkeypatch.setattr("sender_worker.SENDER_LOCK_FILE", lock_file)
-    monkeypatch.setattr("sender_worker._pid_is_running", lambda pid: False)
+    monkeypatch.setattr("price_alert_skill.sender_worker.SENDER_LOCK_FILE", lock_file)
+    monkeypatch.setattr("price_alert_skill.sender_worker._pid_is_running", lambda pid: False)
 
     fd = _acquire_sender_lock()
 
@@ -71,19 +76,19 @@ def test_acquire_sender_lock_replaces_orphan_lock(tmp_path, monkeypatch):
         _release_sender_lock(fd)
 
 
-@patch("sender_worker.time.sleep", return_value=None)
-@patch("sender_worker._release_sender_lock")
-@patch("sender_worker._acquire_sender_lock", return_value=123)
-@patch("sender_worker.close_whatsapp_session")
-@patch("sender_worker.open_whatsapp_session")
+@patch("price_alert_skill.sender_worker.time.sleep", return_value=None)
+@patch("price_alert_skill.sender_worker._release_sender_lock")
+@patch("price_alert_skill.sender_worker._acquire_sender_lock", return_value=123)
+@patch("price_alert_skill.sender_worker.close_whatsapp_session")
+@patch("price_alert_skill.sender_worker.open_whatsapp_session")
 @patch(
-    "sender_worker.send_deal_in_open_chat",
+    "price_alert_skill.sender_worker.send_deal_in_open_chat",
     return_value={"success": True, "dedup_key": "offer-1", "title": "Produto", "url": "https://example.com"},
 )
-@patch("sender_worker.mark_deals_as_sent")
-@patch("sender_worker.load_sent_deals", return_value={"sent": {}, "last_cleaned": None})
-@patch("sender_worker.save_deal_queue")
-@patch("sender_worker.load_deal_queue")
+@patch("price_alert_skill.sender_worker.mark_deals_as_sent")
+@patch("price_alert_skill.sender_worker.load_sent_deals", return_value={"sent": {}, "last_cleaned": None})
+@patch("price_alert_skill.sender_worker.save_deal_queue")
+@patch("price_alert_skill.sender_worker.load_deal_queue")
 def test_run_sender_retries_session_open_in_continuous_mode(
     mock_load_queue,
     _mock_save_queue,
@@ -122,10 +127,10 @@ def test_run_sender_retries_session_open_in_continuous_mode(
     assert mock_mark_sent.call_args.args[0][0]["offer_key"] == "offer-1"
 
 
-@patch("sender_worker._stop_requested", side_effect=[True])
-@patch("sender_worker._release_sender_lock")
-@patch("sender_worker._acquire_sender_lock", return_value=123)
-@patch("sender_worker.close_whatsapp_session")
+@patch("price_alert_skill.sender_worker._stop_requested", side_effect=[True])
+@patch("price_alert_skill.sender_worker._release_sender_lock")
+@patch("price_alert_skill.sender_worker._acquire_sender_lock", return_value=123)
+@patch("price_alert_skill.sender_worker.close_whatsapp_session")
 def test_run_sender_honors_stop_request_before_processing(
     _mock_close_session,
     _mock_lock,
@@ -138,18 +143,18 @@ def test_run_sender_honors_stop_request_before_processing(
     assert results["failed"] == 0
 
 
-@patch("sender_worker._release_sender_lock")
-@patch("sender_worker._acquire_sender_lock", return_value=123)
-@patch("sender_worker.close_whatsapp_session")
-@patch("sender_worker.open_whatsapp_session", return_value={"page": object()})
+@patch("price_alert_skill.sender_worker._release_sender_lock")
+@patch("price_alert_skill.sender_worker._acquire_sender_lock", return_value=123)
+@patch("price_alert_skill.sender_worker.close_whatsapp_session")
+@patch("price_alert_skill.sender_worker.open_whatsapp_session", return_value={"page": object()})
 @patch(
-    "sender_worker.send_deal_in_open_chat",
+    "price_alert_skill.sender_worker.send_deal_in_open_chat",
     return_value={"success": True, "dedup_key": "offer-1", "title": "Produto", "url": "https://example.com"},
 )
-@patch("sender_worker.mark_deals_as_sent")
-@patch("sender_worker.load_sent_deals", return_value={"sent": {}, "last_cleaned": None})
-@patch("sender_worker.save_deal_queue")
-@patch("sender_worker.load_deal_queue")
+@patch("price_alert_skill.sender_worker.mark_deals_as_sent")
+@patch("price_alert_skill.sender_worker.load_sent_deals", return_value={"sent": {}, "last_cleaned": None})
+@patch("price_alert_skill.sender_worker.save_deal_queue")
+@patch("price_alert_skill.sender_worker.load_deal_queue")
 def test_run_sender_processes_one_message_and_exits(
     mock_load_queue,
     _mock_save_queue,

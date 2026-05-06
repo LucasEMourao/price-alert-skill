@@ -1,6 +1,6 @@
 """Tests for Mercado Livre browser-based fetcher (Playwright)."""
 
-from fetch_ml_browser import (
+from price_alert_skill.fetch_ml_browser import (
     _parse_products,
     slugify_query,
 )

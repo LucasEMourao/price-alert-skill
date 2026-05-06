@@ -3,7 +3,7 @@
 import json
 from unittest.mock import patch
 
-from fetch_amazon_br import (
+from price_alert_skill.fetch_amazon_br import (
     AmazonSearchHTMLParser,
     build_affiliate_url,
     normalize_products,
@@ -147,12 +147,12 @@ class TestBuildAffiliateUrl:
         url = build_affiliate_url(None, None)
         assert url is None
 
-    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "")
+    @patch("price_alert_skill.fetch_amazon_br.AMAZON_AFFILIATE_TAG", "")
     def test_returns_raw_url_when_tag_empty(self):
         url = build_affiliate_url(None, "https://www.amazon.com.br/dp/B07GTTRBLV?old=params")
         assert url == "https://www.amazon.com.br/dp/B07GTTRBLV?old=params"
 
-    @patch("fetch_amazon_br.AMAZON_AFFILIATE_TAG", "")
+    @patch("price_alert_skill.fetch_amazon_br.AMAZON_AFFILIATE_TAG", "")
     def test_returns_none_when_tag_empty_and_no_url(self):
         url = build_affiliate_url("B07GTTRBLV", None)
         assert url is None

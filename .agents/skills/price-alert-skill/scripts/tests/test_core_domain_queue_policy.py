@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from core.domain.queue_policy import (
+from price_alert_skill.core.domain.queue_policy import (
     begin_scan_run,
     default_queue,
     get_sendable_entries,

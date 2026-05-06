@@ -3,13 +3,9 @@
 """Tests for scan_deals WhatsApp group resolution."""
 
 import sys
-from pathlib import Path
-from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-import config
-import scan_deals
+import price_alert_skill.config as config
+from price_alert_skill import scan_deals
 
 
 def _sample_deal() -> dict:
@@ -31,8 +27,8 @@ def _sample_deal() -> dict:
 class TestScanDealsWhatsappGroup:
     """Tests for resolving the WhatsApp group in scan_deals.py."""
 
-    @patch("send_to_whatsapp.send_deals_to_whatsapp", return_value={"sent": 1, "failed": 0, "errors": []})
-    def test_main_uses_env_group_when_flag_is_missing(self, mock_send, monkeypatch, tmp_path):
+    def test_main_uses_env_group_when_flag_is_missing(self, monkeypatch, tmp_path):
+        captured = {}
         monkeypatch.setattr(config, "WHATSAPP_GROUP", "Grupo via Env")
         monkeypatch.setattr(scan_deals, "scan_all", lambda *args, **kwargs: [_sample_deal()])
         monkeypatch.setattr(
@@ -41,6 +37,11 @@ class TestScanDealsWhatsappGroup:
             lambda deals, auto_save=True, mark_as_sent=True: (deals, {"sent": {}}),
         )
         monkeypatch.setattr(scan_deals, "format_deal_message", lambda deal: "Mensagem formatada")
+        monkeypatch.setattr(
+            scan_deals,
+            "_WHATSAPP_BATCH_SENDER",
+            lambda **kwargs: captured.update(kwargs) or {"sent": 1, "failed": 0, "errors": []},
+        )
         monkeypatch.setattr(
             sys,
             "argv",
@@ -49,10 +50,10 @@ class TestScanDealsWhatsappGroup:
 
         scan_deals.main()
 
-        assert mock_send.call_args.kwargs["group_name"] == "Grupo via Env"
+        assert captured["group_name"] == "Grupo via Env"
 
-    @patch("send_to_whatsapp.send_deals_to_whatsapp", return_value={"sent": 1, "failed": 0, "errors": []})
-    def test_main_prefers_cli_group_over_env(self, mock_send, monkeypatch, tmp_path):
+    def test_main_prefers_cli_group_over_env(self, monkeypatch, tmp_path):
+        captured = {}
         monkeypatch.setattr(config, "WHATSAPP_GROUP", "Grupo via Env")
         monkeypatch.setattr(scan_deals, "scan_all", lambda *args, **kwargs: [_sample_deal()])
         monkeypatch.setattr(
@@ -61,6 +62,11 @@ class TestScanDealsWhatsappGroup:
             lambda deals, auto_save=True, mark_as_sent=True: (deals, {"sent": {}}),
         )
         monkeypatch.setattr(scan_deals, "format_deal_message", lambda deal: "Mensagem formatada")
+        monkeypatch.setattr(
+            scan_deals,
+            "_WHATSAPP_BATCH_SENDER",
+            lambda **kwargs: captured.update(kwargs) or {"sent": 1, "failed": 0, "errors": []},
+        )
         monkeypatch.setattr(
             sys,
             "argv",
@@ -77,11 +83,11 @@ class TestScanDealsWhatsappGroup:
 
         scan_deals.main()
 
-        assert mock_send.call_args.kwargs["group_name"] == "Grupo via CLI"
+        assert captured["group_name"] == "Grupo via CLI"
 
-    @patch("send_to_whatsapp.send_deals_to_whatsapp")
-    def test_main_marks_only_successful_deals_after_whatsapp_send(self, mock_send, monkeypatch, tmp_path):
+    def test_main_marks_only_successful_deals_after_whatsapp_send(self, monkeypatch, tmp_path):
         saved_payload = {}
+        sender_calls = {}
 
         deal = _sample_deal()
         deal["dedup_key"] = "deal-1"
@@ -101,12 +107,17 @@ class TestScanDealsWhatsappGroup:
                 {"deals": deals, "sent_data": sent_data, "auto_save": auto_save}
             ),
         )
-        mock_send.side_effect = lambda **kwargs: {
-            "sent": 1,
-            "failed": 1,
-            "errors": [{"title": "Mouse Gamer", "reason": "send failed"}],
-            "successful_keys": [kwargs["deals"][0]["dedup_key"]],
-        }
+        monkeypatch.setattr(
+            scan_deals,
+            "_WHATSAPP_BATCH_SENDER",
+            lambda **kwargs: sender_calls.update(kwargs)
+            or {
+                "sent": 1,
+                "failed": 1,
+                "errors": [{"title": "Mouse Gamer", "reason": "send failed"}],
+                "successful_keys": [kwargs["deals"][0]["dedup_key"]],
+            },
+        )
         monkeypatch.setattr(
             sys,
             "argv",
@@ -115,13 +126,13 @@ class TestScanDealsWhatsappGroup:
 
         scan_deals.main()
 
-        assert mock_send.called
+        assert sender_calls["group_name"] == "Grupo via Env"
         assert saved_payload["auto_save"] is True
         assert len(saved_payload["deals"]) == 1
         assert saved_payload["deals"][0]["dedup_key"] == "deal-1"
 
-    @patch("send_to_whatsapp.send_deals_to_whatsapp")
-    def test_scan_only_does_not_send_whatsapp_anymore(self, mock_send, monkeypatch, tmp_path):
+    def test_scan_only_does_not_send_whatsapp_anymore(self, monkeypatch, tmp_path):
+        sender_calls = {}
         deal = _sample_deal()
         deal["current_price"] = 100.0
         deal["current_price_text"] = "R$ 100,00"
@@ -146,6 +157,11 @@ class TestScanDealsWhatsappGroup:
         saved_queue = {}
         monkeypatch.setattr(scan_deals, "save_deal_queue", lambda queue: saved_queue.update(queue))
         monkeypatch.setattr(
+            scan_deals,
+            "_WHATSAPP_BATCH_SENDER",
+            lambda **kwargs: sender_calls.update(kwargs) or {"sent": 1, "failed": 0, "errors": []},
+        )
+        monkeypatch.setattr(
             sys,
             "argv",
             [
@@ -160,7 +176,7 @@ class TestScanDealsWhatsappGroup:
 
         scan_deals.main()
 
-        assert mock_send.called is False
+        assert sender_calls == {}
         assert saved_queue["normal_pool"] or saved_queue["priority_pool"] or saved_queue["urgent_pool"]
         pooled = saved_queue["normal_pool"] or saved_queue["priority_pool"] or saved_queue["urgent_pool"]
         assert pooled[0]["message"]

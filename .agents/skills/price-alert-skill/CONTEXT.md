@@ -46,7 +46,7 @@ A arquitetura foi refatorada para separar regra de negocio, casos de uso e integ
 
 ### 1. Dominio puro
 
-Local: `core/domain/`
+Local: `price_alert_skill/core/domain/`
 
 Responsabilidades:
 - entidades e tipos de negocio
@@ -67,7 +67,7 @@ Arquivos principais:
 
 ### 2. Aplicacao
 
-Local: `core/application/`
+Local: `price_alert_skill/core/application/`
 
 Responsabilidades:
 - orquestrar o fluxo de scan
@@ -80,7 +80,7 @@ Arquivos principais:
 
 ### 3. Ports
 
-Local: `core/ports/`
+Local: `price_alert_skill/core/ports/`
 
 Responsabilidades:
 - definir contratos para persistencia, scan, afiliado, relogio e envio
@@ -95,7 +95,7 @@ Arquivos principais:
 
 ### 4. Adapters
 
-Local: `core/adapters/`
+Local: `price_alert_skill/core/adapters/`
 
 Responsabilidades:
 - implementar os ports com tecnologia concreta
@@ -111,7 +111,7 @@ Arquivos principais:
 
 ### 5. Entrypoints
 
-Local: `core/entrypoints/`
+Local: `price_alert_skill/core/entrypoints/`
 
 Responsabilidades:
 - montar dependencias
@@ -140,7 +140,7 @@ Eles delegam para a arquitetura nova e preservam:
 
 ## Fluxo vigente
 
-1. `scripts/scan_deals.py` dispara o scan pelo entrypoint atual.
+1. `scripts/scan_deals.py` faz bootstrap do pacote e dispara o scan pelo entrypoint atual.
 2. Os scanners concretos da Amazon BR e do Mercado Livre rodam pelos adapters.
 3. Links do Mercado Livre podem virar `meli.la` pelo adapter de afiliado.
 4. O dominio classifica cada oferta em `urgent`, `priority`, `normal` ou `discarded`.
@@ -169,52 +169,53 @@ O sender usa a sequencia nao urgente `priority, priority, priority, normal`, pre
 ## Estrutura relevante
 
 ```text
-.agents/skills/price-alert-skill/
-|-- SKILL.md
-|-- CONTEXT.md
-|-- PLANO.md
-|-- run_scan.ps1
-|-- run_sender.ps1
-|-- stop_sender.ps1
-|-- core/
-|   |-- domain/
-|   |-- application/
-|   |-- ports/
-|   |-- adapters/
-|   `-- entrypoints/
-|-- data/
-|   |-- deal_queue.json
-|   |-- sent_deals.json
-|   |-- melila_cache.json
-|   |-- ml_session.json
-|   `-- messages/
-|-- logs/
-|-- references/
-`-- scripts/
-    |-- deal_queue.py
-    |-- deal_selection.py
-    |-- dispatch_pending_deals.py
-    |-- scan_deals.py
-    |-- send_to_whatsapp.py
-    |-- sender_worker.py
-    `-- tests/
+price-alert-skill/
+|-- pyproject.toml
+|-- README.md
+|-- price_alert_skill/
+|   |-- core/
+|   |   |-- domain/
+|   |   |-- application/
+|   |   |-- ports/
+|   |   |-- adapters/
+|   |   `-- entrypoints/
+|   |-- config.py
+|   |-- scan_deals.py
+|   |-- sender_worker.py
+|   `-- ...
+`-- .agents/skills/price-alert-skill/
+    |-- SKILL.md
+    |-- CONTEXT.md
+    |-- PLANO.md
+    |-- run_scan.ps1
+    |-- run_sender.ps1
+    |-- stop_sender.ps1
+    |-- data/
+    |-- logs/
+    |-- references/
+    `-- scripts/
+        |-- _package_bootstrap.py
+        |-- scan_deals.py
+        |-- sender_worker.py
+        |-- dispatch_pending_deals.py
+        `-- tests/
 ```
 
 ## Componentes ativos
 
-- `core/domain/*`
+- `price_alert_skill/core/domain/*`
   Regra de negocio pura.
 
-- `core/application/*`
+- `price_alert_skill/core/application/*`
   Casos de uso de scan e sender.
 
-- `core/ports/*`
+- `price_alert_skill/core/ports/*`
   Contratos para desacoplamento.
 
-- `core/adapters/*`
+- `price_alert_skill/core/adapters/*`
   Integracoes concretas com JSON, Playwright e afiliado.
 
-- `core/entrypoints/*`
+- `price_alert_skill/core/entrypoints/*`
   CLI fina da arquitetura atual.
 
 - `scripts/scan_deals.py`
@@ -317,8 +318,8 @@ python3 scripts/dispatch_pending_deals.py --max-messages 4
 - A automacao prioriza estabilidade do WhatsApp acima de throughput maximo.
 - O grupo padrao vem de `WHATSAPP_GROUP` no `.env`.
 - O sender roda oculto no Windows, sem depender de janela visivel.
-- Os scripts antigos foram preservados para compatibilidade operacional.
-- `scripts/config.py` garante o bootstrap do root do projeto no `sys.path` para que os entrypoints legados consigam importar `core` quando executados diretamente.
+- Os scripts antigos foram preservados como wrappers finos para compatibilidade operacional.
+- `scripts/_package_bootstrap.py` garante o bootstrap do root do projeto no `sys.path` e define `PRICE_ALERT_SKILL_HOME` para que os entrypoints legados consigam importar o pacote `price_alert_skill` quando executados diretamente.
 
 ## Observacoes de log
 

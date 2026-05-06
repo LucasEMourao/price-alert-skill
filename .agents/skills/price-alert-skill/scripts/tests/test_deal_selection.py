@@ -1,6 +1,6 @@
 """Tests for deal lane selection rules."""
 
-from deal_selection import (
+from price_alert_skill.deal_selection import (
     build_offer_key,
     build_product_key,
     classify_deal_lane,

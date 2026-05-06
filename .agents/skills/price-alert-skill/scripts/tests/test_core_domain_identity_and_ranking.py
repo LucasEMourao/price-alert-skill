@@ -1,12 +1,12 @@
 """Tests for extracted identity and ranking helpers."""
 
-from core.domain.identity import (
+from price_alert_skill.core.domain.identity import (
     build_offer_key,
     build_product_key,
     calculate_savings_brl,
     normalize_url_for_key,
 )
-from core.domain.ranking import (
+from price_alert_skill.core.domain.ranking import (
     deal_sort_key,
     is_better_deal,
     sort_deals_for_sending,

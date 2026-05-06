@@ -21,7 +21,7 @@ Skill para busca sob demanda de ofertas em marketplaces brasileiros com automaca
 
 ### Dominio
 
-Local: `core/domain/`
+Local: `price_alert_skill/core/domain/`
 
 Contem:
 - `models.py`
@@ -36,7 +36,7 @@ Essa camada contem a regra de negocio pura e nao deve depender de Playwright, Po
 
 ### Aplicacao
 
-Local: `core/application/`
+Local: `price_alert_skill/core/application/`
 
 Contem:
 - `scan_use_case.py`
@@ -46,7 +46,7 @@ Essa camada orquestra os casos de uso do projeto.
 
 ### Ports
 
-Local: `core/ports/`
+Local: `price_alert_skill/core/ports/`
 
 Contem os contratos para:
 - fila
@@ -58,7 +58,7 @@ Contem os contratos para:
 
 ### Adapters
 
-Local: `core/adapters/`
+Local: `price_alert_skill/core/adapters/`
 
 Contem as integracoes concretas:
 - JSON
@@ -69,7 +69,7 @@ Contem as integracoes concretas:
 
 ### Entrypoints
 
-Local: `core/entrypoints/`
+Local: `price_alert_skill/core/entrypoints/`
 
 Contem:
 - `scan_cli.py`
@@ -84,7 +84,7 @@ Os scripts antigos em `scripts/` continuam existindo, mas agora funcionam como c
 - `scripts/sender_worker.py`
 - `scripts/dispatch_pending_deals.py`
 
-O bootstrap de compatibilidade fica em `scripts/config.py`, que garante o root do projeto no `sys.path` quando um desses scripts e executado diretamente.
+O bootstrap de compatibilidade fica em `scripts/_package_bootstrap.py`, que garante o root do projeto no `sys.path`, define `PRICE_ALERT_SKILL_HOME` e permite que a skill chame o pacote repo-level `price_alert_skill`.
 
 ## Fluxo atual
 
@@ -100,7 +100,7 @@ O bootstrap de compatibilidade fica em `scripts/config.py`, que garante o root d
 
 Estado mais importante no momento:
 
-- a arquitetura em camadas ja foi aplicada e esta em `main`
+- a arquitetura em camadas ja foi aplicada e a logica principal agora mora no pacote repo-level `price_alert_skill/`
 - o sender foi corrigido para abrir o grupo corretamente e operar com UTF-8 no bootstrap
 - os wrappers `run_sender.ps1` e `run_scan.ps1` passaram a gravar logs explicitamente em UTF-8
 - o ultimo checkpoint validado teve:
@@ -125,7 +125,8 @@ Se um novo agente assumir a conversa daqui:
 - `scripts/generate_melila_links.py` - fluxo de login e utilitario de afiliado
 - `scripts/send_to_whatsapp.py` - camada Playwright historica do WhatsApp Web
 - `scripts/utils.py` - facades e utilitarios historicos
-- `scripts/config.py` - leitura do `.env`
+- `scripts/config.py` - facade de compatibilidade para configuracao
+- `scripts/_package_bootstrap.py` - bootstrap de import e skill home para os wrappers
 
 ## Variaveis de ambiente
 

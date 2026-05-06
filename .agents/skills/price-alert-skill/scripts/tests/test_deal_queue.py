@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from deal_queue import (
+from price_alert_skill.deal_queue import (
     begin_scan_run,
     get_sendable_entries,
     mark_deal_failed,
@@ -10,7 +10,7 @@ from deal_queue import (
     remove_entry_by_offer_key,
     upsert_pool_deal,
 )
-from deal_selection import prepare_deal_for_selection
+from price_alert_skill.deal_selection import prepare_deal_for_selection
 
 
 def _deal(**overrides):

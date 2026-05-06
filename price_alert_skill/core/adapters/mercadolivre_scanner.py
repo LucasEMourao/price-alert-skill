@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import fetch_ml_browser as mercadolivre_impl
+from price_alert_skill import fetch_ml_browser as mercadolivre_impl
 
 
 class MercadoLivreMarketplaceScanner:

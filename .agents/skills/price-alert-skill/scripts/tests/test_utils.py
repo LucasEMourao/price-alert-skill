@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from utils import (
+from price_alert_skill.utils import (
     calculate_discount,
     can_send_again,
     deal_fingerprint,
@@ -202,13 +202,13 @@ class TestDealDedupKey:
 
 class TestSentDealsPersistence:
     def test_load_sent_deals_empty(self):
-        with patch("utils.SENT_DEALS_FILE", Path("/nonexistent/path.json")):
+        with patch("price_alert_skill.utils.SENT_DEALS_FILE", Path("/nonexistent/path.json")):
             data = load_sent_deals()
             assert data == {"sent": {}, "last_cleaned": None}
 
     def test_save_and_load_sent_deals(self, tmp_path):
         test_file = tmp_path / "sent_deals.json"
-        with patch("utils.SENT_DEALS_FILE", test_file):
+        with patch("price_alert_skill.utils.SENT_DEALS_FILE", test_file):
             data = {"sent": {"https://example.com": "2026-01-01T00:00:00"}, "last_cleaned": None}
             save_sent_deals(data)
 
@@ -219,7 +219,7 @@ class TestSentDealsPersistence:
 class TestFilterNewDeals:
     def test_all_new_deals(self, tmp_path):
         test_file = tmp_path / "sent_deals.json"
-        with patch("utils.SENT_DEALS_FILE", test_file):
+        with patch("price_alert_skill.utils.SENT_DEALS_FILE", test_file):
             deals = [
                 {"url": "https://example.com/p1", "current_price": 100.0, "offer_key": "offer-1"},
                 {"url": "https://example.com/p2", "current_price": 200.0, "offer_key": "offer-2"},
@@ -234,7 +234,7 @@ class TestFilterNewDeals:
         from datetime import datetime, timezone
         test_file = tmp_path / "sent_deals.json"
         recent_ts = datetime.now(timezone.utc).isoformat()
-        with patch("utils.SENT_DEALS_FILE", test_file):
+        with patch("price_alert_skill.utils.SENT_DEALS_FILE", test_file):
             existing = {
                 "sent": {"offer-1": {"product_key": "product-1", "sent_at": recent_ts}},
                 "last_cleaned": None,
@@ -252,7 +252,7 @@ class TestFilterNewDeals:
         from datetime import datetime, timezone
         test_file = tmp_path / "sent_deals.json"
         recent_ts = datetime.now(timezone.utc).isoformat()
-        with patch("utils.SENT_DEALS_FILE", test_file):
+        with patch("price_alert_skill.utils.SENT_DEALS_FILE", test_file):
             existing = {
                 "sent": {
                     "offer-1": {"product_key": "product-1", "sent_at": recent_ts},
@@ -270,7 +270,7 @@ class TestFilterNewDeals:
 
     def test_filter_without_marking_as_sent(self, tmp_path):
         test_file = tmp_path / "sent_deals.json"
-        with patch("utils.SENT_DEALS_FILE", test_file):
+        with patch("price_alert_skill.utils.SENT_DEALS_FILE", test_file):
             deals = [{"url": "https://example.com/p1", "dedup_key": "deal-1", "current_price": 100.0}]
             new_deals, sent_data = filter_new_deals(deals, auto_save=False, mark_as_sent=False)
 
@@ -281,7 +281,7 @@ class TestFilterNewDeals:
 class TestMarkDealsAsSent:
     def test_marks_dedup_key_after_success(self, tmp_path):
         test_file = tmp_path / "sent_deals.json"
-        with patch("utils.SENT_DEALS_FILE", test_file):
+        with patch("price_alert_skill.utils.SENT_DEALS_FILE", test_file):
             deals = [{
                 "url": "https://example.com/public",
                 "dedup_key": "deal-1",

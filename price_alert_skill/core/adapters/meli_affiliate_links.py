@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import generate_melila_links as melila_impl
+from price_alert_skill import generate_melila_links as melila_impl
 
 
 class MeliAffiliateLinkGenerator:

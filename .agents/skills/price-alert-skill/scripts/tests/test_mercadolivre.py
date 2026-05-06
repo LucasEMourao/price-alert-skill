@@ -1,6 +1,6 @@
 """Tests for Mercado Livre BR fetcher parser."""
 
-from fetch_mercadolivre_br import (
+from price_alert_skill.fetch_mercadolivre_br import (
     extract_products_from_html,
     parse_brl_from_label,
     slugify_query,
