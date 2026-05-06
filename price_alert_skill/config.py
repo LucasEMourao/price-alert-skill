@@ -9,6 +9,11 @@ import sys
 from pathlib import Path
 
 from .paths import REPO_ROOT, resolve_skill_root
+from .runtime import (
+    RuntimeEnvironment,
+    find_linux_browser_executable,
+    resolve_runtime_environment,
+)
 
 
 _skill_root = resolve_skill_root()
@@ -27,6 +32,7 @@ if _env_file.exists():
 
 AMAZON_AFFILIATE_TAG = os.environ.get("AMAZON_AFFILIATE_TAG", "brunoentende-20")
 WHATSAPP_GROUP = os.environ.get("WHATSAPP_GROUP", "")
+PRICE_ALERT_RUNTIME = os.environ.get("PRICE_ALERT_RUNTIME", "auto")
 WHATSAPP_CHROME_PATH = os.environ.get("WHATSAPP_CHROME_PATH", "")
 WHATSAPP_PROFILE_DIR = os.environ.get("WHATSAPP_PROFILE_DIR", "")
 
@@ -57,11 +63,20 @@ def resolve_whatsapp_group(cli_group: str = "") -> str:
     return WHATSAPP_GROUP.strip()
 
 
+def resolve_price_alert_runtime() -> RuntimeEnvironment:
+    """Resolve the runtime used for host-specific adapters."""
+    return resolve_runtime_environment(PRICE_ALERT_RUNTIME)
+
+
 def resolve_whatsapp_chrome_path() -> str:
     """Resolve the Chrome executable path for WhatsApp Web automation."""
     explicit_path = WHATSAPP_CHROME_PATH.strip()
-    if explicit_path and Path(explicit_path).exists():
+    if explicit_path:
         return explicit_path
+
+    runtime = resolve_price_alert_runtime()
+    if runtime.is_linux:
+        return find_linux_browser_executable()
 
     candidate_paths = [
         Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
@@ -87,7 +102,8 @@ def resolve_whatsapp_profile_dir() -> str:
     if explicit_path:
         return explicit_path
 
-    if os.name == "nt":
+    runtime = resolve_price_alert_runtime()
+    if runtime.is_windows:
         local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
         if local_app_data:
             return str(
@@ -95,10 +111,16 @@ def resolve_whatsapp_profile_dir() -> str:
                 / "price-alert-skill"
                 / "whatsapp_chrome_profile"
             )
+        return str(
+            resolve_skill_root()
+            / "data"
+            / "whatsapp_session"
+            / "windows_chrome_profile"
+        )
 
     return str(
         resolve_skill_root()
         / "data"
         / "whatsapp_session"
-        / "chrome_profile"
+        / "linux_chrome_profile"
     )
