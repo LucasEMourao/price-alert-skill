@@ -22,6 +22,7 @@ from price_alert_skill.send_to_whatsapp import (
     _download_image,
     _ensure_logged_in,
     _is_logged_in,
+    _reset_whatsapp_session,
     _send_image_with_caption,
     _search_and_open_group,
     open_whatsapp_session,
@@ -204,6 +205,57 @@ class TestOpenWhatsAppSession:
         assert session["page"] is mock_page
         assert session["context"] is mock_context
         assert session["playwright"] is mock_playwright
+
+    @patch("playwright.sync_api.sync_playwright")
+    @patch("price_alert_skill.send_to_whatsapp._search_and_open_group")
+    @patch("price_alert_skill.send_to_whatsapp._find_group_search_box")
+    @patch("price_alert_skill.send_to_whatsapp._ensure_logged_in")
+    @patch("price_alert_skill.send_to_whatsapp._clear_stale_profile_lock_files")
+    @patch("price_alert_skill.send_to_whatsapp.configure_utf8_stdio")
+    def test_uses_resolved_profile_dir_at_launch_time(
+        self,
+        _mock_configure_utf8_stdio,
+        _mock_clear_locks,
+        _mock_ensure_logged_in,
+        _mock_find_group_search_box,
+        _mock_search_and_open_group,
+        mock_sync_playwright,
+        monkeypatch,
+        tmp_path,
+    ):
+        profile_dir = tmp_path / "linux_chrome_profile"
+        monkeypatch.setattr(
+            send_to_whatsapp,
+            "resolve_whatsapp_profile_dir",
+            lambda: str(profile_dir),
+        )
+
+        mock_page = MagicMock()
+        mock_context = MagicMock()
+        mock_context.new_page.return_value = mock_page
+
+        mock_playwright = MagicMock()
+        mock_playwright.chromium.launch_persistent_context.return_value = mock_context
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
+
+        open_whatsapp_session(group_name="Grupo de Teste", headed=False)
+
+        launch_kwargs = mock_playwright.chromium.launch_persistent_context.call_args.kwargs
+        assert launch_kwargs["user_data_dir"] == str(profile_dir)
+        assert profile_dir.exists()
+
+    def test_reset_session_removes_only_resolved_profile(self, tmp_path):
+        active_profile = tmp_path / "linux_chrome_profile"
+        other_profile = tmp_path / "windows_chrome_profile"
+        active_profile.mkdir()
+        other_profile.mkdir()
+        (active_profile / "SingletonLock").write_text("lock", encoding="utf-8")
+        (other_profile / "SingletonLock").write_text("lock", encoding="utf-8")
+
+        _reset_whatsapp_session(str(active_profile))
+
+        assert not active_profile.exists()
+        assert other_profile.exists()
 
 
 class TestSearchAndOpenGroup:

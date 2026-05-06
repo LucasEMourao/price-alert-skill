@@ -35,7 +35,6 @@ from price_alert_skill.paths import resolve_data_dir
 DATA_DIR = resolve_data_dir()
 SESSION_DIR = DATA_DIR / "whatsapp_session"
 DEBUG_DIR = DATA_DIR / "debug"
-USER_DATA_DIR = resolve_whatsapp_profile_dir()
 
 _WHATSAPP_URL = "https://web.whatsapp.com"
 
@@ -116,8 +115,13 @@ _GROUP_SEARCH_SELECTORS.extend(
 )
 
 
-def _clear_stale_profile_lock_files() -> None:
-    profile_dir = Path(USER_DATA_DIR)
+def _resolve_user_data_dir() -> str:
+    """Resolve the active WhatsApp browser profile for this process."""
+    return resolve_whatsapp_profile_dir()
+
+
+def _clear_stale_profile_lock_files(user_data_dir: str | None = None) -> None:
+    profile_dir = Path(user_data_dir or _resolve_user_data_dir())
     for pattern in ("Singleton*", "DevToolsActivePort"):
         for lock_file in profile_dir.glob(pattern):
             try:
@@ -149,9 +153,9 @@ def _download_image(url: str, timeout: int = 30) -> str | None:
         return None
 
 
-def _reset_whatsapp_session() -> None:
+def _reset_whatsapp_session(user_data_dir: str | None = None) -> None:
     """Remove the persisted WhatsApp Web browser profile."""
-    session_path = Path(USER_DATA_DIR)
+    session_path = Path(user_data_dir or _resolve_user_data_dir())
     if not session_path.exists():
         return
 
@@ -678,15 +682,17 @@ def open_whatsapp_session(
     configure_utf8_stdio()
     playwright = sync_playwright().start()
 
-    if reset_session:
-        _reset_whatsapp_session()
+    user_data_dir = _resolve_user_data_dir()
 
-    _clear_stale_profile_lock_files()
+    if reset_session:
+        _reset_whatsapp_session(user_data_dir)
+
+    _clear_stale_profile_lock_files(user_data_dir)
 
     chrome_path = resolve_whatsapp_chrome_path()
-    Path(USER_DATA_DIR).mkdir(parents=True, exist_ok=True)
+    Path(user_data_dir).mkdir(parents=True, exist_ok=True)
     launch_kwargs = {
-        "user_data_dir": USER_DATA_DIR,
+        "user_data_dir": user_data_dir,
         "headless": not headed,
         "viewport": {"width": 1280, "height": 720},
         "locale": "pt-BR",
@@ -703,14 +709,14 @@ def open_whatsapp_session(
         launch_kwargs["executable_path"] = chrome_path
     else:
         print("Using Playwright Chromium for WhatsApp Web.")
-    print(f"Using WhatsApp Chrome profile dir: {USER_DATA_DIR}")
+    print(f"Using WhatsApp Chrome profile dir: {user_data_dir}")
 
     try:
         context = playwright.chromium.launch_persistent_context(**launch_kwargs)
     except Exception as first_exc:
         print(f"  WARNING: Failed to launch WhatsApp persistent context: {first_exc}")
         print("  Retrying once after clearing stale profile files...")
-        _clear_stale_profile_lock_files()
+        _clear_stale_profile_lock_files(user_data_dir)
         time.sleep(2)
         context = playwright.chromium.launch_persistent_context(**launch_kwargs)
     context.add_init_script(
