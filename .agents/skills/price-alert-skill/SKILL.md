@@ -174,7 +174,7 @@ python3 scripts/sender_worker.py --continuous --headed
 
 # Wrappers Ubuntu/WSL
 ./run_scan.sh
-./run_sender.sh --group "$WHATSAPP_GROUP"
+./ensure_sender.sh
 ./run_sender.sh --headed --group "$WHATSAPP_GROUP"
 ./stop_sender.sh
 
@@ -293,6 +293,7 @@ Wrappers reais no repositorio:
 - `setup_ubuntu.sh`
 - `run_scan.sh`
 - `run_sender.sh`
+- `ensure_sender.sh`
 - `run_hourly.sh`
 - `stop_sender.sh`
 
@@ -301,5 +302,6 @@ Resumo operacional:
 - `setup_ubuntu.sh` cria a `.venv` do skill, instala o pacote repo-level em modo editable e baixa o Chromium do Playwright
 - `run_scan.sh` executa um scan one-shot em modo `--scan-only` e grava em `logs/scan-YYYY-MM-DD.log`
 - `run_sender.sh` supervisiona o sender continuo no WSL e grava em `logs/sender-YYYY-MM-DD.log`
+- `ensure_sender.sh` deve ser chamado pelo cron dentro da janela ativa para religar o sender se ele cair
 - `stop_sender.sh` cria `data/sender_stop.request`, espera parada graciosa e aplica fallback se necessario
 - para o primeiro login visivel do WhatsApp no WSLg, rode `./run_sender.sh --headed --group "$WHATSAPP_GROUP"` quando houver oferta na fila

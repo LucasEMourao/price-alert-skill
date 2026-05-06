@@ -31,10 +31,10 @@ From the skill directory:
 cd .agents/skills/price-alert-skill
 ./setup_ubuntu.sh
 ./run_scan.sh --marketplaces amazon_br --max-results 1 --min-discount 999
-./run_sender.sh --group "$WHATSAPP_GROUP" --idle-exit-seconds 5
+./ensure_sender.sh
 ./stop_sender.sh
 ```
 
 Use `./run_sender.sh --headed --group "$WHATSAPP_GROUP"` when you need the first visible WhatsApp Web login in WSLg. The sender opens WhatsApp only when there is a sendable deal in the queue, so run a normal scan first if the queue is empty.
 
-The Linux scripts mirror the Windows `.ps1` wrappers and write logs to `.agents/skills/price-alert-skill/logs/`.
+The Linux scripts mirror the Windows `.ps1` wrappers and write logs to `.agents/skills/price-alert-skill/logs/`. Use `ensure_sender.sh` from cron to restart the sender if WSL, networking or the browser process drops during the active window.
