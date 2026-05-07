@@ -89,6 +89,41 @@ class TestDetectCategoryEmoji:
     def test_query_fallback(self):
         assert detect_category_emoji("Produto sem keyword", "mouse gamer") == "🖱️"
 
+    def test_beauty_perfume_category(self):
+        assert (
+            detect_category_emoji(
+                "Perfume Feminino Importado",
+                "perfume feminino",
+                category="beleza_perfumes",
+                product_profile="beauty",
+            )
+            == "🌸"
+        )
+
+    def test_beauty_makeup_category(self):
+        assert (
+            detect_category_emoji(
+                "Batom Liquido Matte",
+                "batom liquido",
+                category="beleza_maquiagem",
+                product_profile="beauty",
+            )
+            == "💄"
+        )
+
+    def test_beauty_keyword_fallback_avoids_tech_default(self):
+        assert (
+            detect_category_emoji(
+                "Produto sem categoria",
+                "protetor solar facial",
+                product_profile="beauty",
+            )
+            == "☀️"
+        )
+
+    def test_beauty_profile_default_avoids_gamer_emoji(self):
+        assert detect_category_emoji("Produto Generico", "generico", product_profile="beauty") == "✨"
+
 
 class TestFormatDealMessage:
     def test_message_with_discount(self):
@@ -109,6 +144,23 @@ class TestFormatDealMessage:
         assert "🎯 Hoje: R$ 149,90" in msg
         assert "🔥 25% OFF" in msg
         assert "https://example.com/product" in msg
+
+    def test_beauty_message_uses_beauty_emoji(self):
+        deal = {
+            "title": "Perfume Feminino Importado",
+            "current_price": 129.90,
+            "url": "https://example.com/perfume",
+            "discount_pct": 35.0,
+            "previous_price": 199.90,
+            "image_url": None,
+            "query": "perfume feminino",
+            "category": "beleza_perfumes",
+            "product_profile": "beauty",
+        }
+        msg = format_deal_message(deal)
+
+        assert msg.startswith("🌸 OFERTA DO DIA")
+        assert "🌸 Perfume Feminino Importado" in msg
 
     def test_message_without_discount(self):
         deal = {

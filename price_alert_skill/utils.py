@@ -56,11 +56,73 @@ CATEGORY_EMOJIS = {
 }
 
 DEFAULT_EMOJI = "🎮"
+BEAUTY_DEFAULT_EMOJI = "✨"
+
+BEAUTY_CATEGORY_EMOJIS = {
+    "beleza_perfumes": "🌸",
+    "beleza_skincare": "✨",
+    "beleza_cabelo_tratamento": "💇‍♀️",
+    "beleza_cabelo_ferramentas": "💨",
+    "beleza_maquiagem": "💄",
+    "beleza_corpo_banho": "🧴",
+    "beleza_unhas": "💅",
+    "beleza_acessorios": "🎀",
+}
+
+BEAUTY_KEYWORD_EMOJIS = {
+    "perfume": "🌸",
+    "body splash": "🌸",
+    "skincare": "✨",
+    "serum": "✨",
+    "protetor solar": "☀️",
+    "hidratante": "🧴",
+    "limpeza facial": "🧼",
+    "sabonete": "🧼",
+    "mascara facial": "✨",
+    "lip balm": "💋",
+    "shampoo": "💇‍♀️",
+    "condicionador": "💇‍♀️",
+    "capilar": "💇‍♀️",
+    "cabelo": "💇‍♀️",
+    "secador": "💨",
+    "escova": "💨",
+    "chapinha": "💨",
+    "babyliss": "💨",
+    "maquiagem": "💄",
+    "batom": "💄",
+    "gloss": "💄",
+    "blush": "💄",
+    "base": "💄",
+    "rimel": "💄",
+    "esmalte": "💅",
+    "unha": "💅",
+    "necessaire": "🎀",
+    "organizador": "🎀",
+    "cetim": "🎀",
+}
 
 
-def detect_category_emoji(title: str, query: str) -> str:
+def detect_category_emoji(
+    title: str,
+    query: str,
+    *,
+    category: str = "",
+    product_profile: str = "",
+) -> str:
     """Detect product category and return matching emoji."""
+    normalized_category = (category or "").strip().lower()
+    normalized_profile = (product_profile or "").strip().lower()
     combined = f"{title} {query}".lower()
+
+    if normalized_category in BEAUTY_CATEGORY_EMOJIS:
+        return BEAUTY_CATEGORY_EMOJIS[normalized_category]
+
+    if normalized_profile == "beauty" or normalized_category.startswith("beleza_"):
+        for keyword, emoji in BEAUTY_KEYWORD_EMOJIS.items():
+            if keyword in combined:
+                return emoji
+        return BEAUTY_DEFAULT_EMOJI
+
     for keyword, emoji in CATEGORY_EMOJIS.items():
         if keyword in combined:
             return emoji
@@ -87,8 +149,15 @@ def format_deal_message(deal: dict[str, Any]) -> str:
     discount_pct = deal["discount_pct"]
     previous_price = deal.get("previous_price")
     query = deal.get("query", "")
+    category = deal.get("category", "")
+    product_profile = deal.get("product_profile", "")
 
-    category_emoji = detect_category_emoji(title, query)
+    category_emoji = detect_category_emoji(
+        title,
+        query,
+        category=category,
+        product_profile=product_profile,
+    )
 
     if len(title) > 120:
         title = title[:117] + "..."
