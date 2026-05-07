@@ -6,7 +6,7 @@ python="$skill_root/.venv/bin/python"
 script="$skill_root/scripts/scan_deals.py"
 log_dir="$skill_root/logs"
 log_file="$log_dir/scan-$(date +%F).log"
-scan_profile="${PRICE_ALERT_SCAN_PROFILE:-tech}"
+scan_profile="${PRICE_ALERT_SCAN_PROFILE:-}"
 scan_categories="${PRICE_ALERT_SCAN_CATEGORIES:-}"
 
 mkdir -p "$log_dir"
@@ -20,7 +20,10 @@ fi
 cd "$skill_root"
 export PYTHONUTF8=1
 
-scan_args=(--all --profile "$scan_profile")
+scan_args=(--all)
+if [ -n "$scan_profile" ]; then
+    scan_args+=(--profile "$scan_profile")
+fi
 if [ -n "$scan_categories" ]; then
     scan_args+=(--query-categories "$scan_categories")
 fi

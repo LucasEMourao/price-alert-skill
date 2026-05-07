@@ -6,15 +6,19 @@ $script = Join-Path $root "scripts\scan_deals.py"
 $logDir = Join-Path $root "logs"
 $logFile = Join-Path $logDir ("scan-" + (Get-Date -Format "yyyy-MM-dd") + ".log")
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-$scanProfile = if ($env:PRICE_ALERT_SCAN_PROFILE) { $env:PRICE_ALERT_SCAN_PROFILE } else { "tech" }
+$scanProfile = $env:PRICE_ALERT_SCAN_PROFILE
 $scanCategories = $env:PRICE_ALERT_SCAN_CATEGORIES
 $arguments = @(
     "-u"
     $script
     "--all"
-    "--profile"
-    $scanProfile
 )
+if ($scanProfile) {
+    $arguments += @(
+        "--profile"
+        $scanProfile
+    )
+}
 if ($scanCategories) {
     $arguments += @(
         "--query-categories"
