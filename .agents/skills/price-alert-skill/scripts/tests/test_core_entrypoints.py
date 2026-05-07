@@ -26,6 +26,8 @@ def test_sender_cli_invokes_run_sender(monkeypatch):
             "11",
             "--max-messages",
             "2",
+            "--profile",
+            "beauty",
         ],
     )
 
@@ -42,6 +44,7 @@ def test_sender_cli_invokes_run_sender(monkeypatch):
     assert captured["continuous"] is True
     assert captured["poll_seconds"] == 11
     assert captured["max_messages"] == 2
+    assert captured["product_profile"] == "beauty"
 
 
 def test_dispatch_cli_invokes_dispatch_use_case(monkeypatch):

@@ -111,3 +111,41 @@ def test_get_sendable_entries_skips_backoff_items():
     mark_deal_failed(queue, deal["offer_key"])
 
     assert get_sendable_entries(queue, "normal") == []
+
+
+def test_get_sendable_entries_filters_by_product_profile():
+    queue = _empty_queue()
+    tech = _deal()
+    beauty = _deal(
+        title="Perfume Feminino Importado",
+        url="https://example.com/perfume",
+        product_url="https://example.com/perfume",
+        query="perfume feminino",
+        source_query="perfume feminino",
+        current_price=129.9,
+        previous_price=199.9,
+        discount_pct=35.0,
+    )
+    scan_sequence = begin_scan_run(queue)
+    upsert_pool_deal(queue, tech, tech["lane"], scan_sequence=scan_sequence)
+    upsert_pool_deal(queue, beauty, beauty["lane"], scan_sequence=scan_sequence)
+
+    tech_entries = get_sendable_entries(queue, "normal", product_profile="tech")
+    beauty_entries = get_sendable_entries(queue, "priority", product_profile="beauty")
+
+    assert [entry["product_profile"] for entry in tech_entries] == ["tech"]
+    assert [entry["product_profile"] for entry in beauty_entries] == ["beauty"]
+
+
+def test_missing_product_profile_is_treated_as_tech_for_migration():
+    queue = _empty_queue()
+    queue["normal_pool"].append(
+        {
+            "offer_key": "legacy",
+            "product_key": "legacy",
+            "title": "Legacy Tech Deal",
+        }
+    )
+
+    assert get_sendable_entries(queue, "normal", product_profile="tech")
+    assert get_sendable_entries(queue, "normal", product_profile="beauty") == []

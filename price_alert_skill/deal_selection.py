@@ -328,12 +328,18 @@ def prepare_deal_for_selection(deal: dict[str, Any]) -> dict[str, Any]:
     prepared = dict(deal)
     source_query = prepared.get("source_query") or prepared.get("query", "")
     category = prepared.get("category") or get_query_category(source_query)
+    product_profile = (
+        prepared.get("product_profile")
+        or get_query_profile(source_query)
+        or DEFAULT_QUERY_PROFILE
+    )
     product_url = prepared.get("product_url") or prepared.get("url", "")
     current_price = prepared.get("current_price")
     previous_price = prepared.get("previous_price")
 
     prepared["source_query"] = source_query
     prepared["category"] = category
+    prepared["product_profile"] = product_profile
     prepared["product_url"] = product_url
     prepared["product_key"] = prepared.get("product_key") or build_product_key(product_url)
     prepared["offer_key"] = prepared.get("offer_key") or build_offer_key(

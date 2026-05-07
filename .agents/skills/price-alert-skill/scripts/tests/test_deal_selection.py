@@ -112,11 +112,28 @@ def test_prepare_deal_for_selection_builds_keys_and_lane():
     deal = prepare_deal_for_selection(_base_deal())
 
     assert deal["category"] == "audio_comunicacao"
+    assert deal["product_profile"] == "tech"
     assert deal["product_key"] == build_product_key("https://example.com/p/headset?ref=abc")
     assert deal["offer_key"] == build_offer_key(deal["product_key"], 199.9)
     assert deal["savings_brl"] == 100.0
     assert deal["lane"] == "normal"
     assert deal["is_super_promo"] is False
+
+
+def test_prepare_deal_for_selection_tags_beauty_profile():
+    deal = prepare_deal_for_selection(
+        _base_deal(
+            title="Perfume Feminino Importado",
+            query="perfume feminino",
+            source_query="perfume feminino",
+            current_price=129.9,
+            previous_price=199.9,
+            discount_pct=35.0,
+        )
+    )
+
+    assert deal["category"] == "beleza_perfumes"
+    assert deal["product_profile"] == "beauty"
 
 
 def test_gpu_can_become_urgent():

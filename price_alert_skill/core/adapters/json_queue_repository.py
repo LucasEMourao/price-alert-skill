@@ -143,8 +143,14 @@ class JSONQueueRepository:
         lane: str,
         *,
         now: datetime | str | None = None,
+        product_profile: str | None = None,
     ) -> list[dict[str, Any]]:
-        return get_sendable_entries(queue, lane, now=now)
+        return get_sendable_entries(
+            queue,
+            lane,
+            now=now,
+            product_profile=product_profile,
+        )
 
     def mark_deal_failed(
         self,

@@ -12,13 +12,14 @@ def select_next_deal(
     *,
     non_urgent_index: int,
     now,
+    product_profile: str | None = None,
     get_sendable_entries_fn: Callable[..., list[dict[str, Any]]],
     sort_deals_for_sending_fn: Callable[[list[dict[str, Any]]], list[dict[str, Any]]],
     non_urgent_lane_sequence: tuple[str, ...],
 ) -> tuple[dict[str, Any] | None, int]:
     """Select the next deal respecting urgent priority and the configured lane ratio."""
     urgent_entries = sort_deals_for_sending_fn(
-        get_sendable_entries_fn(queue, "urgent", now=now)
+        get_sendable_entries_fn(queue, "urgent", now=now, product_profile=product_profile)
     )
     if urgent_entries:
         return urgent_entries[0], non_urgent_index
@@ -27,7 +28,7 @@ def select_next_deal(
     for offset in range(sequence_length):
         lane = non_urgent_lane_sequence[(non_urgent_index + offset) % sequence_length]
         lane_entries = sort_deals_for_sending_fn(
-            get_sendable_entries_fn(queue, lane, now=now)
+            get_sendable_entries_fn(queue, lane, now=now, product_profile=product_profile)
         )
         if lane_entries:
             next_index = (non_urgent_index + offset + 1) % sequence_length
@@ -45,6 +46,7 @@ def run_sender_loop(
     poll_seconds: int,
     max_messages: int | None,
     idle_exit_seconds: int | None,
+    product_profile: str | None,
     stop_requested_fn: Callable[[], bool],
     now_fn: Callable[[], Any],
     load_deal_queue_fn: Callable[[], dict[str, Any]],
@@ -82,6 +84,7 @@ def run_sender_loop(
                 queue,
                 non_urgent_index=non_urgent_index,
                 now=now,
+                product_profile=product_profile,
                 get_sendable_entries_fn=get_sendable_entries_fn,
                 sort_deals_for_sending_fn=sort_deals_for_sending_fn,
                 non_urgent_lane_sequence=non_urgent_lane_sequence,

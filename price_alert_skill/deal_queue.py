@@ -193,6 +193,12 @@ def get_sendable_entries(
     lane: str,
     *,
     now: datetime | str | None = None,
+    product_profile: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return pending entries whose retry backoff has elapsed."""
-    return _QUEUE_REPOSITORY.get_sendable_entries(queue, lane, now=now)
+    return _QUEUE_REPOSITORY.get_sendable_entries(
+        queue,
+        lane,
+        now=now,
+        product_profile=product_profile,
+    )

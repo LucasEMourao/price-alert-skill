@@ -60,6 +60,45 @@ def test_select_next_deal_prefers_urgent_without_advancing_ratio():
     assert next_index == 2
 
 
+def test_select_next_deal_can_filter_by_product_profile():
+    tech = _deal(
+        title="Fonte 750W",
+        url="https://example.com/fonte",
+        product_url="https://example.com/fonte",
+        query="fonte 750w",
+        source_query="fonte 750w",
+        current_price=399.0,
+        previous_price=599.0,
+        discount_pct=33.0,
+    )
+    tech["lane"] = "priority"
+    tech["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    tech["last_seen_scan"] = 1
+    beauty = _deal(
+        title="Perfume Feminino Importado",
+        url="https://example.com/perfume",
+        product_url="https://example.com/perfume",
+        query="perfume feminino",
+        source_query="perfume feminino",
+        current_price=129.9,
+        previous_price=199.9,
+        discount_pct=35.0,
+    )
+    beauty["lane"] = "priority"
+    beauty["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    beauty["last_seen_scan"] = 1
+
+    queue = _queue_with(priority=[tech, beauty])
+    selected, _next_index = _select_next_deal(
+        queue,
+        non_urgent_index=0,
+        product_profile="beauty",
+    )
+
+    assert selected["product_profile"] == "beauty"
+    assert selected["offer_key"] == beauty["offer_key"]
+
+
 def test_acquire_sender_lock_replaces_orphan_lock(tmp_path, monkeypatch):
     lock_file = tmp_path / "sender_worker.lock"
     lock_file.write_text("pid=999999 started_at=2026-04-28T18:27:56+00:00", encoding="utf-8")

@@ -272,6 +272,7 @@ Depois deste checkpoint, o proximo trabalho recomendado e:
 
 - manter queries e produtos tech separados por perfil
 - preparar armazenamento de fila/historico com perfil/canal
+- filtrar o sender com `PRICE_ALERT_SEND_PROFILE`
 - deixar tech pronto para envio futuro em outro grupo sem misturar com beauty
 
 ### Sprint 5 - Virada do grupo atual para beauty

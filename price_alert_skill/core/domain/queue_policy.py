@@ -13,6 +13,7 @@ POOL_KEYS = {
     "priority": "priority_pool",
     "normal": "normal_pool",
 }
+DEFAULT_PRODUCT_PROFILE = "tech"
 
 
 def utc_now() -> datetime:
@@ -63,6 +64,7 @@ def normalize_entry(
     normalized["last_seen_scan"] = int(normalized.get("last_seen_scan", 0) or 0)
     normalized["send_after_at"] = normalized.get("send_after_at")
     normalized["last_send_attempt_at"] = normalized.get("last_send_attempt_at")
+    normalized["product_profile"] = normalized.get("product_profile") or DEFAULT_PRODUCT_PROFILE
     return normalized
 
 
@@ -136,6 +138,7 @@ def build_pool_entry(
     entry["retry_count"] = int(retry_count)
     entry["last_send_attempt_at"] = last_send_attempt_at
     entry["send_after_at"] = send_after_at
+    entry["product_profile"] = entry.get("product_profile") or DEFAULT_PRODUCT_PROFILE
     return entry
 
 
@@ -259,12 +262,17 @@ def get_sendable_entries(
     lane: str,
     *,
     now: datetime | str | None = None,
+    product_profile: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return pending entries whose retry backoff has elapsed."""
     now_dt = parse_iso(to_iso(now)) or utc_now()
     pool_name = POOL_KEYS[lane]
+    selected_profile = (product_profile or "").strip().lower()
     sendable = []
     for entry in queue.get(pool_name, []):
+        entry_profile = str(entry.get("product_profile") or DEFAULT_PRODUCT_PROFILE).strip().lower()
+        if selected_profile and entry_profile != selected_profile:
+            continue
         send_after = parse_iso(entry.get("send_after_at"))
         if send_after and send_after > now_dt:
             continue

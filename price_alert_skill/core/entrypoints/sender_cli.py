@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -53,6 +54,11 @@ def main(
         help="Optional cap on how many deals this invocation should process.",
     )
     parser.add_argument(
+        "--profile",
+        default=os.environ.get("PRICE_ALERT_SEND_PROFILE", "tech"),
+        help="Queued product profile to send: tech or beauty (default: PRICE_ALERT_SEND_PROFILE or tech)",
+    )
+    parser.add_argument(
         "--idle-exit-seconds",
         type=int,
         help="Optional idle timeout for continuous mode. If omitted, the worker keeps polling.",
@@ -65,6 +71,8 @@ def main(
 
     now = now_fn() if now_fn is not None else datetime.now(timezone.utc)
     logger(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Starting sender worker...\n")
+    if args.profile:
+        logger(f"Using send profile: {args.profile}\n")
 
     results = run_sender_fn(
         group_name=group_name,
@@ -74,6 +82,7 @@ def main(
         poll_seconds=args.poll_seconds,
         max_messages=args.max_messages,
         idle_exit_seconds=args.idle_exit_seconds,
+        product_profile=args.profile,
     )
 
     logger(f"\nResults: {results['sent']} sent, {results['failed']} failed")

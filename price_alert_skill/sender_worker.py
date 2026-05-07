@@ -125,11 +125,13 @@ def _select_next_deal(
     *,
     non_urgent_index: int,
     now: datetime | None = None,
+    product_profile: str | None = None,
 ) -> tuple[dict[str, Any] | None, int]:
     return application_select_next_deal(
         queue,
         non_urgent_index=non_urgent_index,
         now=now,
+        product_profile=product_profile,
         get_sendable_entries_fn=get_sendable_entries,
         sort_deals_for_sending_fn=sort_deals_for_sending,
         non_urgent_lane_sequence=tuple(CADENCE_CONFIG["non_urgent_lane_sequence"]),
@@ -145,6 +147,7 @@ def run_sender(
     poll_seconds: int | None = None,
     max_messages: int | None = None,
     idle_exit_seconds: int | None = None,
+    product_profile: str | None = None,
 ) -> dict[str, Any]:
     """Run the single sender loop once or continuously."""
     lock_fd = _acquire_sender_lock()
@@ -168,6 +171,7 @@ def run_sender(
             poll_seconds=poll_seconds,
             max_messages=max_messages,
             idle_exit_seconds=idle_exit_seconds,
+            product_profile=product_profile,
             stop_requested_fn=_stop_requested,
             now_fn=_utc_now,
             load_deal_queue_fn=load_deal_queue,
