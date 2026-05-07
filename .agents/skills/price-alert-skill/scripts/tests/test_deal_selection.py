@@ -4,7 +4,11 @@ from price_alert_skill.deal_selection import (
     build_offer_key,
     build_product_key,
     classify_deal_lane,
+    get_queries,
     get_query_category,
+    get_query_definitions,
+    get_query_profile,
+    get_query_profiles,
     prepare_deal_for_selection,
     qualifies_normal,
     qualifies_priority,
@@ -31,6 +35,53 @@ def _base_deal(**overrides):
 
 def test_get_query_category_maps_headset_to_audio():
     assert get_query_category("headset gamer") == "audio_comunicacao"
+
+
+def test_default_query_profile_preserves_tech_catalog():
+    queries = get_queries()
+
+    assert get_query_profiles() == ("tech", "beauty")
+    assert queries[0] == "mouse gamer"
+    assert "placa de video rtx" in queries
+    assert "perfume feminino" not in queries
+
+
+def test_beauty_query_profile_contains_grouped_feminine_products():
+    definitions = get_query_definitions("beauty")
+    queries = [definition["query"] for definition in definitions]
+    categories = {definition["category"] for definition in definitions}
+
+    assert "perfume feminino" in queries
+    assert "serum vitamina c" in queries
+    assert "escova secadora" in queries
+    assert "batom liquido" in queries
+    assert "cabine uv led unha" in queries
+    assert "pente cabelo cacheado" in queries
+    assert categories == {
+        "beleza_acessorios",
+        "beleza_cabelo_ferramentas",
+        "beleza_cabelo_tratamento",
+        "beleza_corpo_banho",
+        "beleza_maquiagem",
+        "beleza_perfumes",
+        "beleza_skincare",
+        "beleza_unhas",
+    }
+
+
+def test_get_query_category_and_profile_map_beauty_queries():
+    assert get_query_category("perfume feminino") == "beleza_perfumes"
+    assert get_query_category("serum acido hialuronico") == "beleza_skincare"
+    assert get_query_profile("batom liquido") == "beauty"
+
+
+def test_unknown_query_profile_raises_value_error():
+    try:
+        get_queries("unknown")
+    except ValueError as exc:
+        assert "Available profiles" in str(exc)
+    else:
+        raise AssertionError("Expected get_queries to reject unknown profiles")
 
 
 def test_prepare_deal_for_selection_builds_keys_and_lane():

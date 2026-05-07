@@ -6,6 +6,7 @@ python="$skill_root/.venv/bin/python"
 script="$skill_root/scripts/scan_deals.py"
 log_dir="$skill_root/logs"
 log_file="$log_dir/scan-$(date +%F).log"
+scan_profile="${PRICE_ALERT_SCAN_PROFILE:-tech}"
 
 mkdir -p "$log_dir"
 
@@ -19,7 +20,7 @@ cd "$skill_root"
 export PYTHONUTF8=1
 
 set +e
-"$python" -u "$script" --all --scan-only --min-discount 10 --max-results 8 "$@" >> "$log_file" 2>&1
+"$python" -u "$script" --all --profile "$scan_profile" --scan-only --min-discount 10 --max-results 8 "$@" >> "$log_file" 2>&1
 exit_code=$?
 set -e
 

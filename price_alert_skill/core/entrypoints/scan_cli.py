@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -10,7 +11,7 @@ from typing import Any, Callable
 def main(
     *,
     configure_utf8_stdio_fn: Callable[[], None],
-    get_queries_fn: Callable[[], list[str]],
+    get_queries_fn: Callable[[str | None], list[str]],
     scan_all_fn: Callable[[int, float, list[str], list[str]], list[dict[str, Any]]],
     deduplicate_run_deals_fn: Callable[[list[dict[str, Any]]], list[dict[str, Any]]],
     prepare_deal_for_selection_fn: Callable[[dict[str, Any]], dict[str, Any]],
@@ -26,7 +27,12 @@ def main(
         description="Scan marketplaces for products with displayed discounts."
     )
     parser.add_argument("query", nargs="?", help="Search query (omit if using --all)")
-    parser.add_argument("--all", action="store_true", help="Scan the configured hardware/peripheral categories")
+    parser.add_argument("--all", action="store_true", help="Scan all queries from the configured product profile")
+    parser.add_argument(
+        "--profile",
+        default=os.environ.get("PRICE_ALERT_SCAN_PROFILE", "tech"),
+        help="Product query profile to use with --all (default: PRICE_ALERT_SCAN_PROFILE or tech)",
+    )
     parser.add_argument(
         "--scan-only",
         action="store_true",
@@ -58,10 +64,15 @@ def main(
         parser.error("Provide a query or use --all")
 
     marketplaces = [m.strip() for m in args.marketplaces.split(",")]
-    queries = get_queries_fn() if args.all else [args.query]
+    try:
+        queries = get_queries_fn(args.profile) if args.all else [args.query]
+    except ValueError as exc:
+        parser.error(str(exc))
 
     now = now_fn() if now_fn is not None else datetime.now(timezone.utc)
     logger(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Scanning for deals (min {args.min_discount}% off)...\n")
+    if args.all:
+        logger(f"Using scan profile: {args.profile}\n")
 
     scanned_deals = scan_all_fn(args.max_results, args.min_discount, marketplaces, queries)
     unique_deals = deduplicate_run_deals_fn(scanned_deals)

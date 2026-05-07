@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from price_alert_skill.core.entrypoints.dispatch_cli import main as dispatch_cli_main
+from price_alert_skill.core.entrypoints.scan_cli import main as scan_cli_main
 from price_alert_skill.core.entrypoints.sender_cli import main as sender_cli_main
 
 
@@ -68,3 +69,45 @@ def test_dispatch_cli_invokes_dispatch_use_case(monkeypatch):
     assert captured["group_name"] == "Grupo Teste"
     assert captured["max_messages"] == 3
     assert captured["headed"] is False
+
+
+def test_scan_cli_passes_selected_profile_to_all_queries(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "scan_cli.py",
+            "--all",
+            "--profile",
+            "beauty",
+            "--scan-only",
+        ],
+    )
+
+    scan_cli_main(
+        configure_utf8_stdio_fn=lambda: None,
+        get_queries_fn=lambda profile: captured.update({"profile": profile}) or ["perfume feminino"],
+        scan_all_fn=lambda max_results, min_discount, marketplaces, queries: captured.update(
+            {
+                "max_results": max_results,
+                "min_discount": min_discount,
+                "marketplaces": marketplaces,
+                "queries": queries,
+            }
+        )
+        or [],
+        deduplicate_run_deals_fn=lambda deals: deals,
+        prepare_deal_for_selection_fn=lambda deal: deal,
+        apply_affiliate_links_fn=lambda deals: None,
+        handle_cadence_scan_fn=lambda parser, deals, args, now: captured.update({"scan_only": args.scan_only}),
+        handle_legacy_flow_fn=lambda parser, deals, args, now: captured.update({"legacy": True}),
+        logger=lambda _message: None,
+        now_fn=lambda: datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert captured["profile"] == "beauty"
+    assert captured["queries"] == ["perfume feminino"]
+    assert captured["marketplaces"] == ["amazon_br", "mercadolivre_br"]
+    assert captured["scan_only"] is True
+    assert "legacy" not in captured

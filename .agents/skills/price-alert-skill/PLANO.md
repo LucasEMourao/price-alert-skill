@@ -244,3 +244,44 @@ Depois deste checkpoint, o proximo trabalho recomendado e:
 - documentar e automatizar melhor a recriacao dos launchers curtos
 - aumentar observabilidade de fim de scan e idle do sender
 - avaliar migracao de JSON para SQLite se a concorrencia aumentar
+
+## Roadmap perfis de produto e multiplos grupos
+
+### Sprint 1 - Perfis de busca
+
+- preservar o catalogo `tech`
+- adicionar o catalogo `beauty`
+- permitir `--profile tech|beauty` no scan
+- manter `tech` como padrao ate a virada operacional ser validada
+
+### Sprint 2 - Regras de qualidade para beauty
+
+- criar regras por categoria de beleza
+- calibrar descontos/economia para tickets menores que tech
+- filtrar ruido comum como amostra, brinde, replica, contratipo e embalagem vazia
+
+### Sprint 3 - Smoke test beauty sem envio real
+
+- rodar `beauty` com poucos resultados
+- inspecionar `data/messages/`
+- ajustar categorias antes de enviar no grupo
+
+### Sprint 4 - Preservar tech para uso futuro
+
+- manter queries e produtos tech separados por perfil
+- preparar armazenamento de fila/historico com perfil/canal
+- deixar tech pronto para envio futuro em outro grupo sem misturar com beauty
+
+### Sprint 5 - Virada do grupo atual para beauty
+
+- trocar `PRICE_ALERT_SCAN_PROFILE=beauty` no ambiente do cron
+- validar scan e sender no grupo atual
+- monitorar volume, qualidade e repeticao das mensagens
+
+### Sprint futura - Envio para dois grupos
+
+- adicionar canais `beauty` e `tech`
+- mapear cada canal para seu grupo de WhatsApp
+- usar um unico sender roteador abrindo o WhatsApp uma vez
+- evitar dois senders concorrentes usando o mesmo perfil do Chromium
+- permitir pausar um canal sem parar o outro
