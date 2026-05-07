@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any
 
 from .types import ACTIVE_LANES
@@ -86,6 +87,46 @@ CATEGORY_RULES = {
         "priority": {"discount_pct": 22.0, "savings_brl": 1200.0},
         "urgent": {"discount_pct": 30.0, "savings_brl": 2000.0},
     },
+    "beleza_perfumes": {
+        "normal": {"discount_pct": 18.0, "savings_brl": 30.0},
+        "priority": {"discount_pct": 35.0, "savings_brl": 90.0},
+        "urgent": {"discount_pct": 50.0, "savings_brl": 180.0},
+    },
+    "beleza_skincare": {
+        "normal": {"discount_pct": 20.0, "savings_brl": 18.0},
+        "priority": {"discount_pct": 35.0, "savings_brl": 60.0},
+        "urgent": {"discount_pct": 50.0, "savings_brl": 140.0},
+    },
+    "beleza_cabelo_tratamento": {
+        "normal": {"discount_pct": 20.0, "savings_brl": 20.0},
+        "priority": {"discount_pct": 35.0, "savings_brl": 65.0},
+        "urgent": {"discount_pct": 50.0, "savings_brl": 140.0},
+    },
+    "beleza_cabelo_ferramentas": {
+        "normal": {"discount_pct": 15.0, "savings_brl": 40.0},
+        "priority": {"discount_pct": 30.0, "savings_brl": 120.0},
+        "urgent": {"discount_pct": 45.0, "savings_brl": 250.0},
+    },
+    "beleza_maquiagem": {
+        "normal": {"discount_pct": 25.0, "savings_brl": 15.0},
+        "priority": {"discount_pct": 40.0, "savings_brl": 55.0},
+        "urgent": {"discount_pct": 55.0, "savings_brl": 120.0},
+    },
+    "beleza_corpo_banho": {
+        "normal": {"discount_pct": 20.0, "savings_brl": 18.0},
+        "priority": {"discount_pct": 35.0, "savings_brl": 55.0},
+        "urgent": {"discount_pct": 50.0, "savings_brl": 120.0},
+    },
+    "beleza_unhas": {
+        "normal": {"discount_pct": 25.0, "savings_brl": 10.0},
+        "priority": {"discount_pct": 40.0, "savings_brl": 35.0},
+        "urgent": {"discount_pct": 55.0, "savings_brl": 80.0},
+    },
+    "beleza_acessorios": {
+        "normal": {"discount_pct": 20.0, "savings_brl": 15.0},
+        "priority": {"discount_pct": 35.0, "savings_brl": 60.0},
+        "urgent": {"discount_pct": 50.0, "savings_brl": 120.0},
+    },
 }
 
 
@@ -117,6 +158,43 @@ _NOTEBOOK_SPEC_MARKERS = (
     "i7",
     "i9",
 )
+_BEAUTY_CATEGORIES = frozenset(
+    {
+        "beleza_perfumes",
+        "beleza_skincare",
+        "beleza_cabelo_tratamento",
+        "beleza_cabelo_ferramentas",
+        "beleza_maquiagem",
+        "beleza_corpo_banho",
+        "beleza_unhas",
+        "beleza_acessorios",
+    }
+)
+_BEAUTY_NOISE_MARKERS = (
+    "amostra gratis",
+    "brinde",
+    "frasco vazio",
+    "vidro vazio",
+    "embalagem vazia",
+    "caixa vazia",
+    "replica",
+    "falso",
+    "atacado",
+    "revenda",
+)
+_BEAUTY_PERFUME_NOISE_MARKERS = (
+    "contratipo",
+    "inspirado",
+    "essencia",
+    "oleo essencial",
+)
+
+
+def _normalize_text(value: Any) -> str:
+    """Normalize marketplace titles for accent-insensitive keyword checks."""
+    text = str(value or "").lower()
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in normalized if not unicodedata.combining(char))
 
 
 def get_category_rule(category: str) -> dict[str, Any]:
@@ -132,7 +210,7 @@ def get_lane_rank(lane: str) -> int:
 def passes_quality_filters(deal: dict[str, Any]) -> bool:
     """Apply extra quality gates for expensive/noisy categories."""
     category = deal.get("category", "")
-    title = str(deal.get("title", "")).lower()
+    title = _normalize_text(deal.get("title", ""))
 
     if category == "pc_gamer":
         matched_groups = 0
@@ -149,6 +227,12 @@ def passes_quality_filters(deal: dict[str, Any]) -> bool:
 
     if category == "notebooks_gamer":
         return any(marker in title for marker in _NOTEBOOK_SPEC_MARKERS)
+
+    if category in _BEAUTY_CATEGORIES:
+        if any(marker in title for marker in _BEAUTY_NOISE_MARKERS):
+            return False
+        if category == "beleza_perfumes":
+            return not any(marker in title for marker in _BEAUTY_PERFUME_NOISE_MARKERS)
 
     return True
 

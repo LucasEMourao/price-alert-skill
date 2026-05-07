@@ -3,6 +3,8 @@
 from price_alert_skill.core.domain.lane_rules import (
     classify_deal_lane,
     passes_quality_filters,
+    qualifies_normal,
+    qualifies_priority,
     qualifies_urgent,
 )
 
@@ -44,3 +46,60 @@ def test_failed_quality_short_circuits_to_discarded():
     }
 
     assert classify_deal_lane(deal) == "discarded"
+
+
+def test_beauty_skincare_uses_lower_ticket_thresholds():
+    deal = {
+        "category": "beleza_skincare",
+        "title": "Serum Vitamina C Facial 30ml",
+        "discount_pct": 25.0,
+        "savings_brl": 24.0,
+        "quality_passed": True,
+    }
+
+    assert qualifies_normal(deal) is True
+    assert qualifies_priority(deal) is False
+    assert classify_deal_lane(deal) == "normal"
+
+
+def test_beauty_hair_tool_can_become_urgent_on_large_savings():
+    deal = {
+        "category": "beleza_cabelo_ferramentas",
+        "title": "Escova Secadora Profissional",
+        "discount_pct": 22.0,
+        "savings_brl": 260.0,
+        "quality_passed": True,
+    }
+
+    assert qualifies_urgent(deal) is True
+    assert classify_deal_lane(deal) == "urgent"
+
+
+def test_beauty_quality_filters_common_marketplace_noise():
+    assert (
+        passes_quality_filters(
+            {
+                "category": "beleza_perfumes",
+                "title": "Perfume Feminino Importado Contratipo 100ml",
+            }
+        )
+        is False
+    )
+    assert (
+        passes_quality_filters(
+            {
+                "category": "beleza_perfumes",
+                "title": "Perfume Feminino Frasco Vazio Decorativo",
+            }
+        )
+        is False
+    )
+    assert (
+        passes_quality_filters(
+            {
+                "category": "beleza_perfumes",
+                "title": "Perfume Feminino Importado 100ml",
+            }
+        )
+        is True
+    )
