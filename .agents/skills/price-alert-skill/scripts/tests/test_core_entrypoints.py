@@ -81,13 +81,18 @@ def test_scan_cli_passes_selected_profile_to_all_queries(monkeypatch):
             "--all",
             "--profile",
             "beauty",
+            "--query-categories",
+            "beleza_perfumes",
             "--scan-only",
         ],
     )
 
     scan_cli_main(
         configure_utf8_stdio_fn=lambda: None,
-        get_queries_fn=lambda profile: captured.update({"profile": profile}) or ["perfume feminino"],
+        get_queries_fn=lambda profile, categories: captured.update(
+            {"profile": profile, "categories": categories}
+        )
+        or ["perfume feminino"],
         scan_all_fn=lambda max_results, min_discount, marketplaces, queries: captured.update(
             {
                 "max_results": max_results,
@@ -107,6 +112,7 @@ def test_scan_cli_passes_selected_profile_to_all_queries(monkeypatch):
     )
 
     assert captured["profile"] == "beauty"
+    assert captured["categories"] == "beleza_perfumes"
     assert captured["queries"] == ["perfume feminino"]
     assert captured["marketplaces"] == ["amazon_br", "mercadolivre_br"]
     assert captured["scan_only"] is True

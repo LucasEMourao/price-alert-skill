@@ -11,7 +11,7 @@ from typing import Any, Callable
 def main(
     *,
     configure_utf8_stdio_fn: Callable[[], None],
-    get_queries_fn: Callable[[str | None], list[str]],
+    get_queries_fn: Callable[[str | None, str | None], list[str]],
     scan_all_fn: Callable[[int, float, list[str], list[str]], list[dict[str, Any]]],
     deduplicate_run_deals_fn: Callable[[list[dict[str, Any]]], list[dict[str, Any]]],
     prepare_deal_for_selection_fn: Callable[[dict[str, Any]], dict[str, Any]],
@@ -32,6 +32,11 @@ def main(
         "--profile",
         default=os.environ.get("PRICE_ALERT_SCAN_PROFILE", "tech"),
         help="Product query profile to use with --all (default: PRICE_ALERT_SCAN_PROFILE or tech)",
+    )
+    parser.add_argument(
+        "--query-categories",
+        default=os.environ.get("PRICE_ALERT_SCAN_CATEGORIES", ""),
+        help="Comma-separated profile categories to scan with --all (default: all profile categories)",
     )
     parser.add_argument(
         "--scan-only",
@@ -65,7 +70,7 @@ def main(
 
     marketplaces = [m.strip() for m in args.marketplaces.split(",")]
     try:
-        queries = get_queries_fn(args.profile) if args.all else [args.query]
+        queries = get_queries_fn(args.profile, args.query_categories) if args.all else [args.query]
     except ValueError as exc:
         parser.error(str(exc))
 
@@ -73,6 +78,8 @@ def main(
     logger(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Scanning for deals (min {args.min_discount}% off)...\n")
     if args.all:
         logger(f"Using scan profile: {args.profile}\n")
+        if args.query_categories:
+            logger(f"Using scan categories: {args.query_categories}\n")
 
     scanned_deals = scan_all_fn(args.max_results, args.min_discount, marketplaces, queries)
     unique_deals = deduplicate_run_deals_fn(scanned_deals)

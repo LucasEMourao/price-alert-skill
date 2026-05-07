@@ -260,8 +260,10 @@ Depois deste checkpoint, o proximo trabalho recomendado e:
 - calibrar descontos/economia para tickets menores que tech
 - filtrar ruido comum como amostra, brinde, replica, contratipo e embalagem vazia
 
-### Sprint 3 - Smoke test beauty sem envio real
+### Sprint 3 - Controle de categorias e smoke test beauty
 
+- permitir rodar apenas categorias especificas do perfil
+- usar `PRICE_ALERT_SCAN_CATEGORIES` para rollout gradual
 - rodar `beauty` com poucos resultados
 - inspecionar `data/messages/`
 - ajustar categorias antes de enviar no grupo

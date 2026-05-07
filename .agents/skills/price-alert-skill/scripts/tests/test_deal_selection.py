@@ -6,6 +6,7 @@ from price_alert_skill.deal_selection import (
     classify_deal_lane,
     get_queries,
     get_query_category,
+    get_query_categories,
     get_query_definitions,
     get_query_profile,
     get_query_profiles,
@@ -67,6 +68,29 @@ def test_beauty_query_profile_contains_grouped_feminine_products():
         "beleza_skincare",
         "beleza_unhas",
     }
+
+
+def test_beauty_query_profile_can_be_filtered_by_category():
+    queries = get_queries("beauty", "beleza_perfumes")
+
+    assert queries == [
+        "perfume feminino",
+        "body splash",
+        "kit perfume feminino",
+        "perfume importado feminino",
+        "perfume arabe feminino",
+        "miniatura perfume feminino",
+    ]
+    assert "beleza_perfumes" in get_query_categories("beauty")
+
+
+def test_unknown_query_category_raises_value_error():
+    try:
+        get_queries("beauty", "beleza_inexistente")
+    except ValueError as exc:
+        assert "Available categories" in str(exc)
+    else:
+        raise AssertionError("Expected get_queries to reject unknown categories")
 
 
 def test_get_query_category_and_profile_map_beauty_queries():

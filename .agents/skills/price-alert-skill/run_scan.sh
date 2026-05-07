@@ -7,6 +7,7 @@ script="$skill_root/scripts/scan_deals.py"
 log_dir="$skill_root/logs"
 log_file="$log_dir/scan-$(date +%F).log"
 scan_profile="${PRICE_ALERT_SCAN_PROFILE:-tech}"
+scan_categories="${PRICE_ALERT_SCAN_CATEGORIES:-}"
 
 mkdir -p "$log_dir"
 
@@ -19,8 +20,14 @@ fi
 cd "$skill_root"
 export PYTHONUTF8=1
 
+scan_args=(--all --profile "$scan_profile")
+if [ -n "$scan_categories" ]; then
+    scan_args+=(--query-categories "$scan_categories")
+fi
+scan_args+=(--scan-only --min-discount 10 --max-results 8)
+
 set +e
-"$python" -u "$script" --all --profile "$scan_profile" --scan-only --min-discount 10 --max-results 8 "$@" >> "$log_file" 2>&1
+"$python" -u "$script" "${scan_args[@]}" "$@" >> "$log_file" 2>&1
 exit_code=$?
 set -e
 

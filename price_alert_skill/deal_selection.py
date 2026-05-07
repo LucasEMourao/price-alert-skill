@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from price_alert_skill.core.domain.identity import (
@@ -243,15 +244,50 @@ def _normalize_query_profile(profile: str | None) -> str:
     return normalized
 
 
+def _normalize_query_categories(categories: str | Iterable[str] | None) -> tuple[str, ...] | None:
+    if categories is None:
+        return None
+    if isinstance(categories, str):
+        values = categories.split(",")
+    else:
+        values = categories
+    normalized = tuple(category.strip().lower() for category in values if category and category.strip())
+    return normalized or None
+
+
 def get_query_profiles() -> tuple[str, ...]:
     """Return available query profile names."""
     return tuple(QUERY_PROFILE_DEFINITIONS)
 
 
-def get_query_definitions(profile: str | None = DEFAULT_QUERY_PROFILE) -> list[dict[str, str]]:
+def get_query_categories(profile: str | None = DEFAULT_QUERY_PROFILE) -> tuple[str, ...]:
+    """Return available query categories for a product profile."""
+    definitions = QUERY_PROFILE_DEFINITIONS[_normalize_query_profile(profile)]
+    return tuple(dict.fromkeys(definition["category"] for definition in definitions))
+
+
+def get_query_definitions(
+    profile: str | None = DEFAULT_QUERY_PROFILE,
+    categories: str | Iterable[str] | None = None,
+) -> list[dict[str, str]]:
     """Return query definitions for the requested product profile."""
     normalized = _normalize_query_profile(profile)
-    return [dict(definition) for definition in QUERY_PROFILE_DEFINITIONS[normalized]]
+    selected_categories = _normalize_query_categories(categories)
+    if selected_categories:
+        available_categories = set(get_query_categories(normalized))
+        unknown_categories = sorted(set(selected_categories) - available_categories)
+        if unknown_categories:
+            available = ", ".join(sorted(available_categories))
+            unknown = ", ".join(unknown_categories)
+            raise ValueError(
+                f"Unknown query categories for profile '{normalized}': {unknown}. "
+                f"Available categories: {available}"
+            )
+    return [
+        dict(definition)
+        for definition in QUERY_PROFILE_DEFINITIONS[normalized]
+        if not selected_categories or definition["category"] in selected_categories
+    ]
 
 
 QUERY_TO_CATEGORY = {
@@ -269,9 +305,12 @@ QUERY_TO_PROFILE = {
 ALL_QUERIES = [definition["query"] for definition in TECH_QUERY_DEFINITIONS]
 
 
-def get_queries(profile: str | None = DEFAULT_QUERY_PROFILE) -> list[str]:
+def get_queries(
+    profile: str | None = DEFAULT_QUERY_PROFILE,
+    categories: str | Iterable[str] | None = None,
+) -> list[str]:
     """Return the cadence query list in the configured profile order."""
-    return [definition["query"] for definition in get_query_definitions(profile)]
+    return [definition["query"] for definition in get_query_definitions(profile, categories)]
 
 
 def get_query_profile(query: str) -> str | None:
