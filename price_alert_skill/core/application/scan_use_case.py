@@ -8,6 +8,33 @@ from pathlib import Path
 from typing import Any, Callable
 
 
+AMAZON_VERIFIED_LIST_PRICE_SOURCES = {"amazon_list_price"}
+
+
+def is_discount_pair_eligible(product: dict[str, Any], marketplace: str) -> bool:
+    """Return whether a product's current/list price pair is safe to use."""
+    current_price = product.get("price")
+    list_price = product.get("list_price")
+    if not current_price or not list_price or list_price <= current_price:
+        return False
+
+    if marketplace != "amazon_br":
+        return True
+
+    if product.get("list_price_source") not in AMAZON_VERIFIED_LIST_PRICE_SOURCES:
+        return False
+
+    unit_prices = {
+        evidence.get("text")
+        for evidence in product.get("price_evidence", [])
+        if evidence.get("role") == "unit"
+    }
+    if product.get("list_price_text") in unit_prices:
+        return False
+
+    return True
+
+
 def extract_deals_from_products(
     products: list[dict[str, Any]],
     marketplace: str,
@@ -30,7 +57,7 @@ def extract_deals_from_products(
         discount_pct = None
         previous_price = None
 
-        if list_price and list_price > current_price:
+        if is_discount_pair_eligible(product, marketplace):
             discount_pct = calculate_discount_fn(current_price, list_price)
             previous_price = list_price
 

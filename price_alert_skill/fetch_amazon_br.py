@@ -63,6 +63,22 @@ def compute_confidence(product: dict[str, Any]) -> float:
     return round(score, 2)
 
 
+UNIT_PRICE_RE = re.compile(
+    r"(?i)(?:/\s*(?:kg|g|mg|l|ml|un|unidade|100\s*g|100\s*ml)|"
+    r"\b(?:kg|g|mg|l|ml)\s+por\b|por\s+(?:kg|g|mg|l|ml|unidade)\b)"
+)
+
+LIST_PRICE_HINT_RE = re.compile(r"(?i)\b(?:de|pre[cç]o recomendado|pre[cç]o anterior|antes)\s*:?\s*$")
+
+
+def _classes(attrs: dict[str, str | None]) -> set[str]:
+    return set((attrs.get("class") or "").split())
+
+
+def _has_class(attrs: dict[str, str | None], class_name: str) -> bool:
+    return class_name in _classes(attrs)
+
+
 class AmazonSearchHTMLParser(HTMLParser):
     def __init__(self, max_results: int) -> None:
         super().__init__()
@@ -72,6 +88,9 @@ class AmazonSearchHTMLParser(HTMLParser):
         self.current_field: str | None = None
         self.card_depth = 0
         self.current_price_candidates: list[str] = []
+        self.price_evidence: list[dict[str, str]] = []
+        self.element_stack: list[dict[str, Any]] = []
+        self.pending_price_hint: str | None = None
         self.anchor_stack: list[str] = []
         self.title_link_active = False
 
@@ -98,12 +117,17 @@ class AmazonSearchHTMLParser(HTMLParser):
             }
             self.card_depth = 1
             self.current_price_candidates = []
+            self.price_evidence = []
+            self.element_stack = [{"tag": tag, "attrs": attr_map}]
+            self.pending_price_hint = None
             self.anchor_stack = []
             self.title_link_active = False
             return
 
         if not self.current:
             return
+
+        self.element_stack.append({"tag": tag, "attrs": attr_map})
 
         if tag == "div":
             self.card_depth += 1
@@ -136,17 +160,7 @@ class AmazonSearchHTMLParser(HTMLParser):
         if tag == "div":
             self.card_depth -= 1
             if self.card_depth == 0:
-                if self.current_price_candidates:
-                    # First price is the current price
-                    self.current["price_text"] = self.current_price_candidates[0]
-                    # If there's a second price higher than the first, it's the list price (original)
-                    if len(self.current_price_candidates) > 1:
-                        current_p = parse_brl_amount(self.current_price_candidates[0])
-                        for candidate in self.current_price_candidates[1:]:
-                            candidate_p = parse_brl_amount(candidate)
-                            if candidate_p and current_p and candidate_p > current_p:
-                                self.current["list_price_text"] = candidate
-                                break
+                self.current["price_evidence"] = self.price_evidence
 
                 if self.current.get("title") and self.current.get("url"):
                     self.products.append(self.current)
@@ -154,6 +168,9 @@ class AmazonSearchHTMLParser(HTMLParser):
                 self.current = None
                 self.current_field = None
                 self.current_price_candidates = []
+                self.price_evidence = []
+                self.element_stack = []
+                self.pending_price_hint = None
                 self.anchor_stack = []
                 self.title_link_active = False
                 return
@@ -167,6 +184,8 @@ class AmazonSearchHTMLParser(HTMLParser):
             self.title_link_active = False
             self.current_field = None
 
+        self._pop_element(tag)
+
     def handle_data(self, data: str) -> None:
         if not self.current:
             return
@@ -179,8 +198,13 @@ class AmazonSearchHTMLParser(HTMLParser):
             self.current["is_sponsored"] = True
 
         if self.current_field == "price" and text.startswith("R$"):
-            self.current_price_candidates.append(text)
+            self._record_price_candidate(text)
             return
+
+        if UNIT_PRICE_RE.search(text):
+            self.pending_price_hint = "unit"
+        elif LIST_PRICE_HINT_RE.search(text):
+            self.pending_price_hint = "list"
 
         if self.title_link_active and self.current.get("title") is None and len(text) > 8 and not text.startswith("R$"):
             self.current["title"] = text
@@ -188,6 +212,53 @@ class AmazonSearchHTMLParser(HTMLParser):
 
         if self.current_field == "review_count" and self.current.get("review_count_text") is None:
             self.current["review_count_text"] = text
+
+    def _record_price_candidate(self, text: str) -> None:
+        role = self._classify_price_context()
+        self.price_evidence.append({"text": text, "role": role})
+        price = parse_brl_amount(text)
+        if price is None:
+            self.pending_price_hint = None
+            return
+
+        if role in {"current", "unknown"} and self.current and self.current.get("price_text") is None:
+            self.current["price_text"] = text
+            self.current_price_candidates.append(text)
+        elif role == "list" and self.current:
+            current_price = parse_brl_amount(self.current.get("price_text"))
+            if current_price and price > current_price and self.current.get("list_price_text") is None:
+                self.current["list_price_text"] = text
+                self.current["list_price_source"] = "amazon_list_price"
+
+        self.pending_price_hint = None
+
+    def _classify_price_context(self) -> str:
+        if self.pending_price_hint == "unit":
+            return "unit"
+
+        price_ancestor = None
+        for element in reversed(self.element_stack):
+            attrs = element["attrs"]
+            if _has_class(attrs, "a-price"):
+                price_ancestor = attrs
+                break
+
+        if price_ancestor is None:
+            return "unknown"
+
+        if price_ancestor.get("data-a-strike") == "true":
+            return "list"
+        if self.pending_price_hint == "list" and _has_class(price_ancestor, "a-text-price"):
+            return "list"
+        if _has_class(price_ancestor, "a-text-price"):
+            return "unit"
+        return "current"
+
+    def _pop_element(self, tag: str) -> None:
+        for index in range(len(self.element_stack) - 1, -1, -1):
+            if self.element_stack[index]["tag"] == tag:
+                del self.element_stack[index:]
+                return
 
 
 _STEALTH_JS = """
@@ -265,6 +336,8 @@ def normalize_products(raw_products: list[dict[str, Any]]) -> list[dict[str, Any
             "review_count": parse_review_count(raw.get("review_count_text")),
             "is_sponsored": bool(raw.get("is_sponsored")),
             "availability": raw.get("availability") or "unknown",
+            "list_price_source": raw.get("list_price_source"),
+            "price_evidence": raw.get("price_evidence", []),
         }
         product["extraction_confidence"] = compute_confidence(product)
         if product["title"] and product["url"]:
