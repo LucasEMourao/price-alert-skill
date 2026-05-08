@@ -60,10 +60,12 @@ class WhatsAppDealChatSenderAdapter:
         *,
         delay_between: float,
         max_retries: int,
+        group_name: str = "",
     ) -> dict[str, Any]:
         return whatsapp_impl.send_deal_in_open_chat(
             page,
             deal,
             delay_between=delay_between,
             max_retries=max_retries,
+            group_name=group_name,
         )

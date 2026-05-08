@@ -115,11 +115,63 @@ def test_acquire_sender_lock_replaces_orphan_lock(tmp_path, monkeypatch):
         _release_sender_lock(fd)
 
 
-@patch("price_alert_skill.sender_worker.time.sleep", return_value=None)
 @patch("price_alert_skill.sender_worker._release_sender_lock")
 @patch("price_alert_skill.sender_worker._acquire_sender_lock", return_value=123)
 @patch("price_alert_skill.sender_worker.close_whatsapp_session")
 @patch("price_alert_skill.sender_worker.open_whatsapp_session")
+@patch(
+    "price_alert_skill.sender_worker.send_deal_in_open_chat",
+    return_value={"success": True, "dedup_key": "offer-1", "title": "Produto", "url": "https://example.com"},
+)
+@patch("price_alert_skill.sender_worker.mark_deals_as_sent")
+@patch("price_alert_skill.sender_worker.load_sent_deals", return_value={"sent": {}, "last_cleaned": None})
+@patch("price_alert_skill.sender_worker.save_deal_queue")
+@patch("price_alert_skill.sender_worker.load_deal_queue")
+def test_run_sender_passes_group_name_to_chat_sender(
+    mock_load_queue,
+    _mock_save_queue,
+    _mock_load_sent,
+    _mock_mark_sent,
+    mock_send_deal,
+    mock_open_session,
+    _mock_close_session,
+    _mock_lock,
+    _mock_unlock,
+):
+    priority = _deal(
+        title="Fonte 750W",
+        url="https://example.com/fonte",
+        product_url="https://example.com/fonte",
+        query="fonte 750w",
+        source_query="fonte 750w",
+        current_price=399.0,
+        previous_price=599.0,
+        discount_pct=33.0,
+    )
+    priority["lane"] = "priority"
+    priority["offer_key"] = "offer-1"
+    priority["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    priority["last_seen_scan"] = 1
+
+    mock_load_queue.side_effect = [_queue_with(priority=[priority]), _queue_with(priority=[])]
+    mock_open_session.return_value = {"page": object(), "group_name": "Grupo beleza"}
+    mock_send_deal.return_value = {
+        "success": True,
+        "dedup_key": "offer-1",
+        "title": "Produto",
+        "url": "https://example.com",
+    }
+
+    run_sender(group_name="Grupo beleza", continuous=False, max_messages=1)
+
+    assert mock_send_deal.call_args.kwargs["group_name"] == "Grupo beleza"
+
+
+@patch("price_alert_skill.sender_worker.time.sleep", return_value=None)
+@patch("price_alert_skill.sender_worker._release_sender_lock")
+@patch("price_alert_skill.sender_worker._acquire_sender_lock", return_value=123)
+@patch("price_alert_skill.sender_worker.close_whatsapp_session")
+@patch("price_alert_skill.sender_worker.open_whatsapp_session", return_value={"page": object()})
 @patch(
     "price_alert_skill.sender_worker.send_deal_in_open_chat",
     return_value={"success": True, "dedup_key": "offer-1", "title": "Produto", "url": "https://example.com"},

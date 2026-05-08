@@ -133,6 +133,7 @@ def run_sender_loop(
                 deal,
                 delay_between=5.0,
                 max_retries=2,
+                group_name=session.get("group_name", ""),
             )
 
             refreshed_queue = prune_expired_entries_fn(load_deal_queue_fn(), now=now_fn())

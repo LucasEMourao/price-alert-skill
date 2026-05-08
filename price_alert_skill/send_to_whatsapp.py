@@ -808,6 +808,27 @@ def _send_image_with_caption(
         return False
 
 
+def _reopen_target_group(page, group_name: str) -> None:
+    """Bring WhatsApp back to the target chat when the main panel drifts away."""
+    if not group_name:
+        raise RuntimeError("Cannot re-open WhatsApp group without a group name.")
+
+    try:
+        page.keyboard.press("Escape")
+        time.sleep(0.5)
+    except Exception:
+        pass
+
+    print(f"  Re-opening group after WhatsApp left the chat view: {group_name}")
+    _search_and_open_group(page, group_name, timeout_ms=20000)
+    _wait_for_any_selector(
+        page,
+        _COMPOSER_READY_SELECTORS + _ATTACH_BUTTON_SELECTORS,
+        timeout_ms=15000,
+        error_message="WhatsApp composer did not become ready after re-opening the group.",
+    )
+
+
 def open_whatsapp_session(
     *,
     group_name: str,
@@ -944,7 +965,12 @@ def open_whatsapp_session(
             time.sleep(15)
 
         _search_and_open_group(page, group_name)
-        return {"playwright": playwright, "context": context, "page": page}
+        return {
+            "playwright": playwright,
+            "context": context,
+            "page": page,
+            "group_name": group_name,
+        }
     except Exception:
         close_whatsapp_session({"playwright": playwright, "context": context})
         raise
@@ -978,6 +1004,7 @@ def send_deal_in_open_chat(
     *,
     delay_between: float = 5.0,
     max_retries: int = 2,
+    group_name: str = "",
 ) -> dict[str, Any]:
     """Send one deal using an already-open WhatsApp group page."""
     title = deal.get("title", "Unknown")
@@ -1015,6 +1042,12 @@ def send_deal_in_open_chat(
             success = _send_image_with_caption(page, image_path, message, delay_between)
             if success:
                 break
+
+            if attempt < max_retries and group_name:
+                try:
+                    _reopen_target_group(page, group_name)
+                except Exception as exc:
+                    print(f"  WARNING: Failed to re-open target group '{group_name}': {exc}")
 
         if success:
             return {
