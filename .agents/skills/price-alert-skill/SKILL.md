@@ -305,3 +305,16 @@ Resumo operacional:
 - `ensure_sender.sh` deve ser chamado pelo cron dentro da janela ativa para religar o sender se ele cair
 - `stop_sender.sh` cria `data/sender_stop.request`, espera parada graciosa e aplica fallback se necessario
 - para o primeiro login visivel do WhatsApp no WSLg, rode `./run_sender.sh --headed --group "$WHATSAPP_GROUP"` quando houver oferta na fila
+
+Diagnostico rapido do fluxo:
+
+```bash
+./diag_flow.sh
+```
+
+O arquivo sai em `logs/diagnostics/flow-*.txt` e inclui:
+
+- versao e branch do repo
+- resumo de RAM e swap do WSL
+- uso de GPU quando `nvidia-smi` estiver disponivel
+- CPU e RSS dos arvores do sender, scan e browser

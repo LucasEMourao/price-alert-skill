@@ -38,3 +38,21 @@ cd .agents/skills/price-alert-skill
 Use `./run_sender.sh --headed --group "$WHATSAPP_GROUP"` when you need the first visible WhatsApp Web login in WSLg. The sender opens WhatsApp only when there is a sendable deal in the queue, so run a normal scan first if the queue is empty.
 
 The Linux scripts mirror the Windows `.ps1` wrappers and write logs to `.agents/skills/price-alert-skill/logs/`. Use `ensure_sender.sh` from cron to restart the sender if WSL, networking or the browser process drops during the active window.
+
+## Flow diagnostic
+
+Use this when you want to share current resource usage with someone who is choosing a server:
+
+```bash
+cd .agents/skills/price-alert-skill
+./diag_flow.sh
+```
+
+The report includes:
+
+- repo version and branch
+- WSL RAM and swap summary
+- current GPU usage when `nvidia-smi` is available
+- CPU and RSS for the sender, scan and browser trees
+
+Send the generated file from `logs/diagnostics/flow-*.txt` together with the server specs.
