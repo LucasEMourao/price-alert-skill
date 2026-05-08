@@ -9,11 +9,11 @@ supervisor_log="$log_dir/sender-supervisor-$(date +%F).log"
 
 mkdir -p "$log_dir" "$skill_root/data"
 
-if pgrep -f "$skill_root/run_sender.sh" >/dev/null 2>&1; then
+if pgrep -f '[r]un_sender\.sh([[:space:]]|$)' >/dev/null 2>&1; then
     exit 0
 fi
 
-if pgrep -f "$skill_root/scripts/sender_worker.py" >/dev/null 2>&1; then
+if pgrep -f '[s]ender_worker\.py([[:space:]]|$)' >/dev/null 2>&1; then
     exit 0
 fi
 

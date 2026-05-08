@@ -70,7 +70,8 @@ def main(
         parser.error("Provide --group or set WHATSAPP_GROUP in .env")
 
     now = now_fn() if now_fn is not None else datetime.now(timezone.utc)
-    logger(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Starting sender worker...\n")
+    log_now = now.astimezone() if now.tzinfo is not None else now
+    logger(f"[{log_now.strftime('%Y-%m-%d %H:%M:%S')}] Starting sender worker...\n")
     if args.profile:
         logger(f"Using send profile: {args.profile}\n")
 
