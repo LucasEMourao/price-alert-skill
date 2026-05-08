@@ -5,7 +5,6 @@ skill_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python="$skill_root/.venv/bin/python"
 script="$skill_root/scripts/sender_worker.py"
 log_dir="$skill_root/logs"
-log_file="$log_dir/sender-$(date +%F).log"
 stop_request_file="$skill_root/data/sender_stop.request"
 restart_delay_seconds="${RESTART_DELAY_SECONDS:-60}"
 
@@ -20,12 +19,17 @@ fi
 cd "$skill_root"
 export PYTHONUTF8=1
 
+log_file_for_now() {
+    printf '%s/sender-%s.log' "$log_dir" "$(date +%F)"
+}
+
 while true; do
     if [ -f "$stop_request_file" ]; then
         rm -f "$stop_request_file"
         exit 0
     fi
 
+    log_file="$(log_file_for_now)"
     set +e
     "$python" -u "$script" --continuous "$@" >> "$log_file" 2>&1
     exit_code=$?
@@ -36,6 +40,7 @@ while true; do
         exit 0
     fi
 
+    log_file="$(log_file_for_now)"
     timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
     if [ "$exit_code" -eq 0 ]; then
         printf '[%s] Sender worker exited cleanly. Restarting in %s seconds...
