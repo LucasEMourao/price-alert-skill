@@ -2,6 +2,8 @@
 
 Python package and skill wrappers for marketplace deal scanning and WhatsApp delivery.
 
+See [OPERATIONS.md](OPERATIONS.md) for the current WSL/cron/runtime operating notes and known host-level risks.
+
 ## Architecture
 
 - `price_alert_skill/`
@@ -22,6 +24,7 @@ The project keeps one shared codebase for Windows and Ubuntu/WSL. Host-specific 
 - Windows keeps the default WhatsApp profile under `%LOCALAPPDATA%\price-alert-skill\whatsapp_chrome_profile`.
 - Linux/WSL reuses the legacy `data/whatsapp_session/chrome_profile` when it exists, preserving existing sessions; otherwise it creates `data/whatsapp_session/linux_chrome_profile`.
 - `WHATSAPP_CHROME_PATH` and `WHATSAPP_PROFILE_DIR` always override auto-detection.
+- Queue entries are tagged by `product_profile`, so `tech` and `beauty` can coexist in the same shared queue/state files without mixing sends.
 
 ## Ubuntu/WSL
 
@@ -37,7 +40,25 @@ cd .agents/skills/price-alert-skill
 
 Use `./run_sender.sh --headed --group "$WHATSAPP_GROUP"` when you need the first visible WhatsApp Web login in WSLg. The sender opens WhatsApp only when there is a sendable deal in the queue, so run a normal scan first if the queue is empty.
 
-The Linux scripts mirror the Windows `.ps1` wrappers and write logs to `.agents/skills/price-alert-skill/logs/`. Use `ensure_sender.sh` from cron to restart the sender if WSL, networking or the browser process drops during the active window.
+The Linux scripts mirror the Windows `.ps1` wrappers and write logs to `.agents/skills/price-alert-skill/logs/`.
+
+- Flow logs now render timestamps in `America/Sao_Paulo`.
+- Use `ensure_sender.sh` from cron to restart the sender if WSL, networking or the browser process drops during the active window.
+- The sender now re-opens the target WhatsApp group when Web leaves the active chat view before a retry.
+
+## Profiles
+
+The codebase currently supports at least these scan/send profiles:
+
+- `tech`: preserved for future reuse and alternate groups.
+- `beauty`: active Linux/WSL profile for the beauty/feminine product flow.
+
+Useful environment variables:
+
+- `PRICE_ALERT_SCAN_PROFILE`
+- `PRICE_ALERT_SCAN_CATEGORIES`
+- `PRICE_ALERT_SEND_PROFILE`
+- `WHATSAPP_GROUP`
 
 ## Flow diagnostic
 
