@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from price_alert_skill.log_time import format_brazil_log_timestamp
+
 
 def main(
     *,
@@ -70,8 +72,7 @@ def main(
         parser.error("Provide --group or set WHATSAPP_GROUP in .env")
 
     now = now_fn() if now_fn is not None else datetime.now(timezone.utc)
-    log_now = now.astimezone() if now.tzinfo is not None else now
-    logger(f"[{log_now.strftime('%Y-%m-%d %H:%M:%S')}] Starting sender worker...\n")
+    logger(f"[{format_brazil_log_timestamp(now)}] Starting sender worker...\n")
     if args.profile:
         logger(f"Using send profile: {args.profile}\n")
 

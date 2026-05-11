@@ -6,6 +6,8 @@ import argparse
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from price_alert_skill.log_time import format_brazil_log_timestamp
+
 
 def main(
     *,
@@ -48,7 +50,7 @@ def main(
         parser.error("Provide --group or set WHATSAPP_GROUP in .env")
 
     now = now_fn() if now_fn is not None else datetime.now(timezone.utc)
-    logger(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Dispatching queued deals...\n")
+    logger(f"[{format_brazil_log_timestamp(now)}] Dispatching queued deals...\n")
 
     results = dispatch_pending_deals_fn(
         group_name=group_name,

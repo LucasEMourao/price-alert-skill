@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export TZ="${TZ:-America/Sao_Paulo}"
+
 skill_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 lock_file="$skill_root/data/sender_worker.lock"
 stop_request_file="$skill_root/data/sender_stop.request"

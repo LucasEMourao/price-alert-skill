@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from price_alert_skill.log_time import format_brazil_log_timestamp
+
 
 def main(
     *,
@@ -75,7 +77,9 @@ def main(
         parser.error(str(exc))
 
     now = now_fn() if now_fn is not None else datetime.now(timezone.utc)
-    logger(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Scanning for deals (min {args.min_discount}% off)...\n")
+    logger(
+        f"[{format_brazil_log_timestamp(now)}] Scanning for deals (min {args.min_discount}% off)...\n"
+    )
     if args.all:
         logger(f"Using scan profile: {args.profile}\n")
         if args.query_categories:

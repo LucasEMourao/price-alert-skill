@@ -14,6 +14,7 @@ from price_alert_skill.core.entrypoints.sender_cli import main as sender_cli_mai
 
 def test_sender_cli_invokes_run_sender(monkeypatch):
     captured = {}
+    logs: list[str] = []
     monkeypatch.setattr(
         sys,
         "argv",
@@ -36,7 +37,7 @@ def test_sender_cli_invokes_run_sender(monkeypatch):
         resolve_whatsapp_group_fn=lambda value: value,
         run_sender_fn=lambda **kwargs: captured.update(kwargs) or {"sent": 1, "failed": 0, "errors": []},
         default_poll_seconds=7,
-        logger=lambda _message: None,
+        logger=logs.append,
         now_fn=lambda: datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc),
     )
 
@@ -45,10 +46,12 @@ def test_sender_cli_invokes_run_sender(monkeypatch):
     assert captured["poll_seconds"] == 11
     assert captured["max_messages"] == 2
     assert captured["product_profile"] == "beauty"
+    assert logs[0].startswith("[2026-04-29 09:00:00] Starting sender worker...")
 
 
 def test_dispatch_cli_invokes_dispatch_use_case(monkeypatch):
     captured = {}
+    logs: list[str] = []
     monkeypatch.setattr(
         sys,
         "argv",
@@ -65,17 +68,19 @@ def test_dispatch_cli_invokes_dispatch_use_case(monkeypatch):
         configure_utf8_stdio_fn=lambda: None,
         resolve_whatsapp_group_fn=lambda value: value,
         dispatch_pending_deals_fn=lambda **kwargs: captured.update(kwargs) or {"sent": 1, "failed": 0, "errors": []},
-        logger=lambda _message: None,
+        logger=logs.append,
         now_fn=lambda: datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc),
     )
 
     assert captured["group_name"] == "Grupo Teste"
     assert captured["max_messages"] == 3
     assert captured["headed"] is False
+    assert logs[0].startswith("[2026-04-29 09:00:00] Dispatching queued deals...")
 
 
 def test_scan_cli_passes_selected_profile_to_all_queries(monkeypatch):
     captured = {}
+    logs: list[str] = []
     monkeypatch.setattr(
         sys,
         "argv",
@@ -110,7 +115,7 @@ def test_scan_cli_passes_selected_profile_to_all_queries(monkeypatch):
         apply_affiliate_links_fn=lambda deals: None,
         handle_cadence_scan_fn=lambda parser, deals, args, now: captured.update({"scan_only": args.scan_only}),
         handle_legacy_flow_fn=lambda parser, deals, args, now: captured.update({"legacy": True}),
-        logger=lambda _message: None,
+        logger=logs.append,
         now_fn=lambda: datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc),
     )
 
@@ -120,3 +125,4 @@ def test_scan_cli_passes_selected_profile_to_all_queries(monkeypatch):
     assert captured["marketplaces"] == ["amazon_br", "mercadolivre_br"]
     assert captured["scan_only"] is True
     assert "legacy" not in captured
+    assert logs[0].startswith("[2026-04-29 09:00:00] Scanning for deals (min 10.0% off)...")
