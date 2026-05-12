@@ -6,6 +6,12 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from price_alert_skill.core.adapters.baileys_sender import (
+    BaileysDealChatSenderAdapter,
+    BaileysGatewayClient,
+    BaileysSessionCloserAdapter,
+    BaileysSessionOpenerAdapter,
+)
 from price_alert_skill.core.adapters.meli_affiliate_links import MeliAffiliateLinkGenerator
 from price_alert_skill.core.adapters.whatsapp_sender import (
     WhatsAppBatchSender,
@@ -99,3 +105,109 @@ def test_whatsapp_sender_adapters_are_port_compatible(monkeypatch):
     assert chat_result["success"] is True
     assert chat_calls[0]["delay_between"] == 5.0
     assert chat_calls[0]["max_retries"] == 2
+
+
+
+class _FakeResponse:
+    def __init__(self, payload, *, ok=True, status_code=200):
+        self._payload = payload
+        self.ok = ok
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if not self.ok:
+            raise RuntimeError(f"http {self.status_code}")
+
+
+def test_baileys_sender_adapters_are_port_compatible():
+    opener_adapter = BaileysSessionOpenerAdapter()
+    closer_adapter = BaileysSessionCloserAdapter()
+    chat_adapter = BaileysDealChatSenderAdapter()
+
+    assert isinstance(opener_adapter, WhatsAppSessionOpener)
+    assert isinstance(closer_adapter, WhatsAppSessionCloser)
+    assert isinstance(chat_adapter, DealChatSender)
+
+
+def test_baileys_deal_sender_posts_image(monkeypatch):
+    posts = []
+
+    def fake_post(url, *, json, timeout):
+        posts.append({"url": url, "json": json, "timeout": timeout})
+        return _FakeResponse({"success": True, "message_id": "msg-1"})
+
+    monkeypatch.setattr(
+        "price_alert_skill.core.adapters.baileys_sender.requests.post",
+        fake_post,
+    )
+
+    client = BaileysGatewayClient(
+        gateway_url="http://gateway.local",
+        group_jid="120363@g.us",
+    )
+    result = BaileysDealChatSenderAdapter()(
+        client,
+        {
+            "title": "Deal",
+            "url": "https://example.com/deal",
+            "dedup_key": "offer-1",
+            "image_url": "https://example.com/image.jpg",
+            "message": "Caption",
+        },
+        delay_between=5.0,
+        max_retries=2,
+    )
+
+    assert result["success"] is True
+    assert result["message_id"] == "msg-1"
+    assert posts[0]["url"] == "http://gateway.local/send-image"
+    assert posts[0]["json"]["group_jid"] == "120363@g.us"
+    assert posts[0]["json"]["image_url"] == "https://example.com/image.jpg"
+    assert posts[0]["json"]["caption"] == "Caption"
+
+
+def test_baileys_deal_sender_reports_gateway_error(monkeypatch):
+    monkeypatch.setattr(
+        "price_alert_skill.core.adapters.baileys_sender.requests.post",
+        lambda *args, **kwargs: _FakeResponse(
+            {"success": False, "reason": "baileys_not_connected"},
+            ok=False,
+            status_code=409,
+        ),
+    )
+
+    client = BaileysGatewayClient(
+        gateway_url="http://gateway.local",
+        group_jid="120363@g.us",
+    )
+    result = BaileysDealChatSenderAdapter()(
+        client,
+        {
+            "title": "Deal",
+            "url": "https://example.com/deal",
+            "image_url": "https://example.com/image.jpg",
+            "message": "Caption",
+        },
+        delay_between=5.0,
+        max_retries=2,
+    )
+
+    assert result["success"] is False
+    assert result["reason"] == "baileys_not_connected"
+
+
+def test_baileys_session_opener_requires_group_jid(monkeypatch):
+    monkeypatch.setattr(
+        "price_alert_skill.core.adapters.baileys_sender.resolve_whatsapp_group_jid",
+        lambda: "",
+    )
+
+    try:
+        BaileysSessionOpenerAdapter()(group_name="", headed=False, reset_session=False)
+    except RuntimeError as exc:
+        assert "WHATSAPP_GROUP_JID" in str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")

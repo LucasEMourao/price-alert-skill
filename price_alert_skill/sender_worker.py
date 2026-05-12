@@ -9,7 +9,16 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from price_alert_skill.config import configure_utf8_stdio, resolve_whatsapp_group
+from price_alert_skill.config import (
+    configure_utf8_stdio,
+    resolve_whatsapp_group,
+    resolve_whatsapp_sender_backend,
+)
+from price_alert_skill.core.adapters.baileys_sender import (
+    BaileysDealChatSenderAdapter,
+    BaileysSessionCloserAdapter,
+    BaileysSessionOpenerAdapter,
+)
 from price_alert_skill.core.adapters.whatsapp_sender import (
     WhatsAppDealChatSenderAdapter,
     WhatsAppSessionCloserAdapter,
@@ -37,9 +46,29 @@ from price_alert_skill.utils import load_sent_deals, mark_deals_as_sent
 DATA_DIR = resolve_data_dir()
 SENDER_LOCK_FILE = DATA_DIR / "sender_worker.lock"
 STOP_REQUEST_FILE = DATA_DIR / "sender_stop.request"
-_WHATSAPP_SESSION_OPENER = WhatsAppSessionOpenerAdapter()
-_WHATSAPP_SESSION_CLOSER = WhatsAppSessionCloserAdapter()
-_WHATSAPP_DEAL_CHAT_SENDER = WhatsAppDealChatSenderAdapter()
+
+
+def _build_whatsapp_sender_adapters(backend: str | None = None):
+    """Build sender adapters for the configured WhatsApp backend."""
+    resolved_backend = (backend or resolve_whatsapp_sender_backend()).strip().lower()
+    if resolved_backend == "baileys":
+        return (
+            BaileysSessionOpenerAdapter(),
+            BaileysSessionCloserAdapter(),
+            BaileysDealChatSenderAdapter(),
+        )
+    return (
+        WhatsAppSessionOpenerAdapter(),
+        WhatsAppSessionCloserAdapter(),
+        WhatsAppDealChatSenderAdapter(),
+    )
+
+
+(
+    _WHATSAPP_SESSION_OPENER,
+    _WHATSAPP_SESSION_CLOSER,
+    _WHATSAPP_DEAL_CHAT_SENDER,
+) = _build_whatsapp_sender_adapters()
 open_whatsapp_session = _WHATSAPP_SESSION_OPENER
 close_whatsapp_session = _WHATSAPP_SESSION_CLOSER
 send_deal_in_open_chat = _WHATSAPP_DEAL_CHAT_SENDER

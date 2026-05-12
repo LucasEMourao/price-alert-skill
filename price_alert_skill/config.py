@@ -32,6 +32,9 @@ if _env_file.exists():
 
 AMAZON_AFFILIATE_TAG = os.environ.get("AMAZON_AFFILIATE_TAG", "brunoentende-20")
 WHATSAPP_GROUP = os.environ.get("WHATSAPP_GROUP", "")
+WHATSAPP_GROUP_JID = os.environ.get("WHATSAPP_GROUP_JID", "")
+WHATSAPP_SENDER_BACKEND = os.environ.get("WHATSAPP_SENDER_BACKEND", "playwright")
+BAILEYS_GATEWAY_URL = os.environ.get("BAILEYS_GATEWAY_URL", "http://127.0.0.1:3015")
 PRICE_ALERT_RUNTIME = os.environ.get("PRICE_ALERT_RUNTIME", "auto")
 WHATSAPP_CHROME_PATH = os.environ.get("WHATSAPP_CHROME_PATH", "")
 WHATSAPP_PROFILE_DIR = os.environ.get("WHATSAPP_PROFILE_DIR", "")
@@ -55,12 +58,35 @@ def configure_utf8_stdio() -> None:
                 pass
 
 
+def resolve_whatsapp_sender_backend() -> str:
+    """Resolve the active WhatsApp sender backend."""
+    backend = (WHATSAPP_SENDER_BACKEND or "playwright").strip().lower()
+    if backend not in {"playwright", "baileys"}:
+        raise ValueError("WHATSAPP_SENDER_BACKEND must be one of: playwright, baileys")
+    return backend
+
+
+def resolve_whatsapp_group_jid() -> str:
+    """Resolve the stable WhatsApp group JID used by the Baileys backend."""
+    return WHATSAPP_GROUP_JID.strip()
+
+
+def resolve_baileys_gateway_url() -> str:
+    """Resolve the local Baileys gateway base URL."""
+    return (BAILEYS_GATEWAY_URL or "http://127.0.0.1:3015").strip().rstrip("/")
+
+
 def resolve_whatsapp_group(cli_group: str = "") -> str:
     """Resolve the WhatsApp group name from CLI input or .env."""
     explicit_group = (cli_group or "").strip()
     if explicit_group:
         return explicit_group
-    return WHATSAPP_GROUP.strip()
+    configured_group = WHATSAPP_GROUP.strip()
+    if configured_group:
+        return configured_group
+    if resolve_whatsapp_sender_backend() == "baileys":
+        return resolve_whatsapp_group_jid()
+    return ""
 
 
 def resolve_price_alert_runtime() -> RuntimeEnvironment:
