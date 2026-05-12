@@ -31,6 +31,7 @@ Main scripts under `.agents/skills/price-alert-skill/`:
 - `run_sender.sh`
 - `ensure_sender.sh`
 - `stop_sender.sh`
+- `boot_recover.sh`
 - `diag_flow.sh`
 
 The wrappers export `TZ=America/Sao_Paulo` so shell-level logs match Brazil time.
@@ -55,6 +56,12 @@ The current Ubuntu crontab pattern is:
 - `run_scan.sh` every 15 minutes from 08:00 through 22:45
 - final scans at 23:00 and 23:15
 - `stop_sender.sh` at 23:30
+
+Optional boot recovery hook:
+
+- `boot_recover.sh` can be added as `@reboot` to re-enable the sender and run one recovery scan only when the instance starts inside the active window.
+- The boot script checks scan health by looking for a live `scan_deals.py` process or a recent successful scan log before deciding whether to launch another scan.
+- The recovery scan is skipped outside the `08:00-23:30` Sao Paulo window.
 
 Important operational rule: cron only runs while the Ubuntu WSL instance is actually alive. If the distro is down, missed runs are not replayed automatically.
 

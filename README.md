@@ -45,6 +45,13 @@ The Linux scripts mirror the Windows `.ps1` wrappers and write logs to `.agents/
 - Flow logs now render timestamps in `America/Sao_Paulo`.
 - Use `ensure_sender.sh` from cron to restart the sender if WSL, networking or the browser process drops during the active window.
 - The sender now re-opens the target WhatsApp group when Web leaves the active chat view before a retry.
+- `boot_recover.sh` can be used from `@reboot` to relaunch the sender and run a recovery scan only inside the active window, while checking whether the scan is already healthy.
+
+Example `@reboot` entry:
+
+```cron
+@reboot cd /home/lukinha/projetos/agentSkills/price-alert-skill/.agents/skills/price-alert-skill && ./boot_recover.sh
+```
 
 ## Profiles
 
