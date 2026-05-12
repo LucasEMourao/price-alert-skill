@@ -281,3 +281,29 @@ def test_run_sender_processes_one_message_and_exits(
     assert results["sent"] == 1
     assert mock_open_session.called
     assert mock_mark_sent.call_args.args[0][0]["offer_key"] == "offer-1"
+
+
+@patch("price_alert_skill.sender_worker.print")
+@patch("price_alert_skill.sender_worker._release_sender_lock")
+@patch("price_alert_skill.sender_worker._acquire_sender_lock", return_value=123)
+@patch("price_alert_skill.sender_worker.close_whatsapp_session")
+@patch("price_alert_skill.sender_worker.save_deal_queue")
+@patch("price_alert_skill.sender_worker.load_deal_queue")
+def test_run_sender_logs_active_whatsapp_backend(
+    mock_load_queue,
+    _mock_save_queue,
+    _mock_close_session,
+    _mock_lock,
+    _mock_unlock,
+    mock_print,
+):
+    mock_load_queue.return_value = _queue_with()
+
+    results = run_sender(group_name="Grupo", continuous=False)
+
+    assert results["sent"] == 0
+    assert any(
+        "Using WhatsApp sender backend:" in call.args[0]
+        for call in mock_print.call_args_list
+        if call.args
+    )

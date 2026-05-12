@@ -63,12 +63,13 @@ def _build_whatsapp_sender_adapters(backend: str | None = None):
         WhatsAppDealChatSenderAdapter(),
     )
 
+_ACTIVE_WHATSAPP_SENDER_BACKEND = resolve_whatsapp_sender_backend()
 
 (
     _WHATSAPP_SESSION_OPENER,
     _WHATSAPP_SESSION_CLOSER,
     _WHATSAPP_DEAL_CHAT_SENDER,
-) = _build_whatsapp_sender_adapters()
+) = _build_whatsapp_sender_adapters(_ACTIVE_WHATSAPP_SENDER_BACKEND)
 open_whatsapp_session = _WHATSAPP_SESSION_OPENER
 close_whatsapp_session = _WHATSAPP_SESSION_CLOSER
 send_deal_in_open_chat = _WHATSAPP_DEAL_CHAT_SENDER
@@ -190,6 +191,8 @@ def run_sender(
         if idle_exit_seconds is not None
         else None
     )
+
+    print(f"Using WhatsApp sender backend: {_ACTIVE_WHATSAPP_SENDER_BACKEND}")
 
     try:
         return application_run_sender_loop(

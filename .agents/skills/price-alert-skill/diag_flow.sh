@@ -117,10 +117,30 @@ else
     say "nvidia-smi not available on this host"
 fi
 
+baileys_gateway_url="${BAILEYS_GATEWAY_URL:-}"
+if [ -z "$baileys_gateway_url" ] && [ -f "$skill_root/.env" ]; then
+    baileys_gateway_url="$(sed -n 's/^BAILEYS_GATEWAY_URL=//p' "$skill_root/.env" | tail -n 1)"
+fi
+baileys_gateway_url="${baileys_gateway_url:-http://127.0.0.1:${BAILEYS_PORT:-3015}}"
+baileys_gateway_url="${baileys_gateway_url%/}"
+
 section "Flow"
 summarize_group "Sender" '[s]cripts/sender_worker.py|[r]un_sender.sh'
+summarize_group "Baileys gateway" '[w]hatsapp_gateway|[b]aileys|[n]ode .*dist/index.js|[t]sx .*src/index.ts'
 summarize_group "Scan" '[s]cripts/scan_deals.py|[r]un_scan.sh'
 summarize_group "Playwright" '[p]laywright/driver/node|[c]hrome-headless-shell|[c]hromium'
+
+section "Baileys Gateway Health"
+say "Health URL: ${baileys_gateway_url}/health"
+if command -v curl >/dev/null 2>&1; then
+    if curl -fsS --max-time 3 "${baileys_gateway_url}/health" 2>>"$report_file" | tee -a "$report_file" >/dev/null; then
+        say "Baileys gateway health: reachable"
+    else
+        say "Baileys gateway health: unavailable"
+    fi
+else
+    say "curl not available; skipped Baileys gateway HTTP health check"
+fi
 
 section "How to share"
 say "Report file: $report_file"
