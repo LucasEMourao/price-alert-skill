@@ -288,3 +288,27 @@ Depois deste checkpoint, o proximo trabalho recomendado e:
 - usar um unico sender roteador abrindo o WhatsApp uma vez
 - evitar dois senders concorrentes usando o mesmo perfil do Chromium
 - permitir pausar um canal sem parar o outro
+
+## Plano de migracao do sender para Baileys
+
+A mudanca sera feita em sprints pequenas na branch `feat/baileys-whatsapp-sender`, com teste e commit ao final de cada sprint. A `main` so deve receber merge depois de validacao funcional e soak test de 24 horas.
+
+Sequencia planejada:
+
+1. Documentar a decisao e os riscos.
+2. Criar um gateway Baileys Node/TypeScript isolado.
+3. Listar grupos e capturar `WHATSAPP_GROUP_JID`.
+4. Enviar texto e imagem com legenda pelo gateway.
+5. Integrar um adapter Python selecionavel por `WHATSAPP_SENDER_BACKEND`.
+6. Conectar o adapter ao sender real e atualizar diagnostico.
+7. Adicionar scripts de operacao/supervisao.
+8. Rodar piloto controlado e depois soak test de 24 horas.
+
+Criterios de aceite antes do merge:
+
+- Playwright continua funcionando como fallback.
+- Baileys envia imagem + legenda + link para o grupo certo.
+- A fila remove apenas ofertas confirmadas como enviadas.
+- `sent_deals.json` registra cooldown corretamente.
+- Nao ha duplicidade em fluxo real.
+- O consumo de RAM cai em relacao ao baseline do sender Playwright (~1.4 GiB RSS).

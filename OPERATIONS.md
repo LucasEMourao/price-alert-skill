@@ -118,3 +118,32 @@ When the flow appears stuck:
 4. Verify `crontab -l` inside Ubuntu.
 5. Verify the Ubuntu instance uptime and `systemctl status cron`.
 6. Run `./diag_flow.sh` for RAM/CPU/GPU/process snapshots.
+
+## Baileys migration operating plan
+
+The WhatsApp sender migration is intentionally staged. The current Playwright sender remains the rollback path while the new Baileys gateway is introduced.
+
+Target environment variables:
+
+- `WHATSAPP_SENDER_BACKEND=playwright|baileys`
+- `WHATSAPP_GROUP_JID=<group-id>@g.us`
+- `BAILEYS_PORT=3015`
+- `BAILEYS_AUTH_DIR=.agents/skills/price-alert-skill/data/baileys_auth`
+- `BAILEYS_LOG_LEVEL=info`
+
+Expected operating order after the gateway exists:
+
+1. Start the Baileys gateway and complete the first QR/pairing login.
+2. Use the gateway group-list endpoint to find `WHATSAPP_GROUP_JID`.
+3. Set `WHATSAPP_SENDER_BACKEND=baileys` only for the pilot window.
+4. Keep the Python sender serial; it still owns queue selection, sent history and cooldown.
+5. Run `diag_flow.sh` before and after the pilot to compare the old Chromium sender against the gateway.
+
+Rollback is changing `WHATSAPP_SENDER_BACKEND` back to `playwright` and restarting the sender. No scan logic should depend on the Baileys gateway.
+
+Risks to monitor:
+
+- Baileys is not an official Meta/WhatsApp Business API integration.
+- WhatsApp Web protocol changes can break the gateway.
+- Linked-device sessions can be invalidated and require a fresh login.
+- Sending must remain serial and moderate to avoid duplicate or spam-like behavior.

@@ -84,3 +84,21 @@ The report includes:
 - CPU and RSS for the sender, scan and browser trees
 
 Send the generated file from `logs/diagnostics/flow-*.txt` together with the server specs.
+
+## Baileys WhatsApp sender migration
+
+A dedicated migration is being developed on `feat/baileys-whatsapp-sender` to replace the WhatsApp sender browser session with a Baileys-based gateway while keeping Playwright as the fallback backend.
+
+Planned sender backends:
+
+- `WHATSAPP_SENDER_BACKEND=playwright`: current default, opens WhatsApp Web through Playwright/Chromium.
+- `WHATSAPP_SENDER_BACKEND=baileys`: experimental backend, sends through a local Baileys gateway without Chromium.
+
+The Baileys flow will require `WHATSAPP_GROUP_JID`, because the gateway sends to a stable WhatsApp JID instead of searching the visible group name in the web UI. The group JID will be discovered through the gateway group-list endpoint after the first login.
+
+Operational guardrails:
+
+- keep exactly one sender consuming the queue;
+- keep Playwright installed and documented as rollback until Baileys passes a 24h soak test;
+- treat Baileys as a non-official WhatsApp Web/Linked Devices integration, with risk of session loss or protocol breakage;
+- validate every sprint with tests or targeted manual checks before committing.

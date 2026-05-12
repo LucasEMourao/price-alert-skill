@@ -354,3 +354,16 @@ python3 scripts/dispatch_pending_deals.py --max-messages 4
 - Melhor observabilidade no scan com timestamp explicito de fim de rodada.
 - Melhor observabilidade no sender com resumo por hora e total drenado da fila.
 - Evoluir a persistencia de JSON para algo mais robusto se a concorrencia crescer.
+
+## Contexto da migracao Baileys
+
+Depois da analise de memoria, o maior custo persistente do sender foi identificado no Chromium do WhatsApp Web. O scan ainda pode usar Playwright, mas o primeiro foco da migracao e retirar Chromium do envio para reduzir RAM e melhorar estabilidade de servidor.
+
+Decisao atual:
+
+- usar Baileys como primeira API experimental para WhatsApp;
+- manter Playwright como fallback ate o novo fluxo passar por 24 horas de soak test;
+- preservar a arquitetura Python atual para fila, ranking, deduplicacao e cooldown;
+- implementar Baileys como gateway local chamado pelo adapter Python.
+
+O novo gateway deve trabalhar com `WHATSAPP_GROUP_JID`, nao com busca visual por nome de grupo. Essa decisao remove dependencia da interface do WhatsApp Web e deixa o envio mais deterministico.
