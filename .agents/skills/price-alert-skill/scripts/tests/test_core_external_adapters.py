@@ -62,12 +62,13 @@ def test_whatsapp_sender_adapters_are_port_compatible(monkeypatch):
     )
     monkeypatch.setattr(
         "price_alert_skill.core.adapters.whatsapp_sender.whatsapp_impl.send_deal_in_open_chat",
-        lambda page, deal, *, delay_between, max_retries: chat_calls.append(
+        lambda page, deal, *, delay_between, max_retries, group_name="": chat_calls.append(
             {
                 "page": page,
                 "deal": deal,
                 "delay_between": delay_between,
                 "max_retries": max_retries,
+                "group_name": group_name,
             }
         ) or {"success": True, "title": deal["title"], "url": deal["url"]},
     )

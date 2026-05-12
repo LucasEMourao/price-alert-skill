@@ -248,10 +248,10 @@ class AmazonSearchHTMLParser(HTMLParser):
 
         if price_ancestor.get("data-a-strike") == "true":
             return "list"
-        if self.pending_price_hint == "list" and _has_class(price_ancestor, "a-text-price"):
-            return "list"
         if _has_class(price_ancestor, "a-text-price"):
-            return "unit"
+            return "list"
+        if self.pending_price_hint == "list":
+            return "list"
         return "current"
 
     def _pop_element(self, tag: str) -> None:
