@@ -21,6 +21,15 @@ npm run dev
 
 The first successful run prints a QR code in the terminal. Scan it as a linked device, then restart the process to confirm that the session persists.
 
+From the skill directory, use the operational wrappers:
+
+```bash
+cd ../.agents/skills/price-alert-skill
+./run_baileys_gateway.sh      # foreground, best for QR login
+./ensure_baileys_gateway.sh   # background/supervised start
+./stop_baileys_gateway.sh
+```
+
 ## Current endpoints
 
 - `GET /health`: connection and session status.

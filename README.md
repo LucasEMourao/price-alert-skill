@@ -34,8 +34,10 @@ From the skill directory:
 cd .agents/skills/price-alert-skill
 ./setup_ubuntu.sh
 ./run_scan.sh --marketplaces amazon_br --max-results 1 --min-discount 999
+./ensure_baileys_gateway.sh   # only when piloting WHATSAPP_SENDER_BACKEND=baileys
 ./ensure_sender.sh
 ./stop_sender.sh
+./stop_baileys_gateway.sh
 ```
 
 Use `./run_sender.sh --headed --group "$WHATSAPP_GROUP"` when you need the first visible WhatsApp Web login in WSLg. The sender opens WhatsApp only when there is a sendable deal in the queue, so run a normal scan first if the queue is empty.
@@ -99,6 +101,17 @@ The Baileys flow will require `WHATSAPP_GROUP_JID`, because the gateway sends to
 Operational guardrails:
 
 - keep exactly one sender consuming the queue;
+- when using Baileys, start `./ensure_baileys_gateway.sh` before `./ensure_sender.sh`;
+- stop in reverse order: `./stop_sender.sh`, then `./stop_baileys_gateway.sh`;
 - keep Playwright installed and documented as rollback until Baileys passes a 24h soak test;
 - treat Baileys as a non-official WhatsApp Web/Linked Devices integration, with risk of session loss or protocol breakage;
 - validate every sprint with tests or targeted manual checks before committing.
+
+Useful Baileys gateway commands from `.agents/skills/price-alert-skill`:
+
+```bash
+./run_baileys_gateway.sh      # foreground, useful for first QR login
+./ensure_baileys_gateway.sh   # background/supervised start
+./stop_baileys_gateway.sh
+./diag_flow.sh
+```

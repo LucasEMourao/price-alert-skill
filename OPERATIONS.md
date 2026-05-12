@@ -31,6 +31,9 @@ Main scripts under `.agents/skills/price-alert-skill/`:
 - `run_sender.sh`
 - `ensure_sender.sh`
 - `stop_sender.sh`
+- `run_baileys_gateway.sh`
+- `ensure_baileys_gateway.sh`
+- `stop_baileys_gateway.sh`
 - `boot_recover.sh`
 - `diag_flow.sh`
 
@@ -133,13 +136,45 @@ Target environment variables:
 
 Expected operating order after the gateway exists:
 
-1. Start the Baileys gateway and complete the first QR/pairing login.
+1. Start the Baileys gateway with `./run_baileys_gateway.sh` for the first QR/pairing login, or `./ensure_baileys_gateway.sh` for supervised background operation.
 2. Use the gateway group-list endpoint to find `WHATSAPP_GROUP_JID`.
 3. Set `WHATSAPP_SENDER_BACKEND=baileys` only for the pilot window.
-4. Keep the Python sender serial; it still owns queue selection, sent history and cooldown.
-5. Run `diag_flow.sh` before and after the pilot to compare the old Chromium sender against the gateway.
+4. Start or restart the Python sender with `./ensure_sender.sh`.
+5. Keep the Python sender serial; it still owns queue selection, sent history and cooldown.
+6. Run `diag_flow.sh` before and after the pilot to compare the old Chromium sender against the gateway.
+
+Stop order:
+
+1. `./stop_sender.sh`
+2. `./stop_baileys_gateway.sh`
 
 Rollback is changing `WHATSAPP_SENDER_BACKEND` back to `playwright` and restarting the sender. No scan logic should depend on the Baileys gateway.
+
+The Baileys gateway scripts use:
+
+- PID file: `data/baileys_gateway.pid`
+- Auth/session directory: `data/baileys_auth` by default
+- Supervisor log: `logs/baileys-supervisor-YYYY-MM-DD.log`
+
+Example `systemd` shape for a Linux server:
+
+```ini
+[Unit]
+Description=Price Alert Baileys Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/lukinha/projetos/agentSkills/price-alert-skill/.agents/skills/price-alert-skill
+ExecStart=/home/lukinha/projetos/agentSkills/price-alert-skill/.agents/skills/price-alert-skill/run_baileys_gateway.sh
+Restart=always
+RestartSec=10
+Environment=TZ=America/Sao_Paulo
+
+[Install]
+WantedBy=multi-user.target
+```
 
 Risks to monitor:
 
