@@ -6,6 +6,7 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   useMultiFileAuthState,
   type ConnectionState,
+  type GroupMetadata,
   type WASocket,
 } from "baileys";
 import type { Logger } from "pino";
@@ -20,6 +21,14 @@ type PublicStatus = {
   lastDisconnectAt: string | null;
   lastDisconnectReason: string | null;
   hasQr: boolean;
+};
+
+export type GroupSummary = {
+  jid: string;
+  subject: string;
+  owner: string | null;
+  participantCount: number;
+  participants?: Array<{ jid: string; admin: string | null }>;
 };
 
 export class BaileysGateway {
@@ -56,6 +65,14 @@ export class BaileysGateway {
     };
   }
 
+  async listGroups(includeParticipants = false): Promise<GroupSummary[]> {
+    const socket = this.requireConnectedSocket();
+    const groups = await socket.groupFetchAllParticipating();
+    return Object.values(groups)
+      .map((metadata) => this.toGroupSummary(metadata, includeParticipants))
+      .sort((left, right) => left.subject.localeCompare(right.subject, "pt-BR"));
+  }
+
   async stop(): Promise<void> {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -64,6 +81,32 @@ export class BaileysGateway {
     this.socket?.end(undefined);
     this.socket = null;
     this.connection = "close";
+  }
+
+  private requireConnectedSocket(): WASocket {
+    if (!this.socket || this.connection !== "open") {
+      throw new Error("baileys_not_connected");
+    }
+    return this.socket;
+  }
+
+  private toGroupSummary(metadata: GroupMetadata, includeParticipants: boolean): GroupSummary {
+    const participants = metadata.participants || [];
+    const summary: GroupSummary = {
+      jid: metadata.id,
+      subject: metadata.subject || "",
+      owner: metadata.owner || null,
+      participantCount: participants.length,
+    };
+
+    if (includeParticipants) {
+      summary.participants = participants.map((participant) => ({
+        jid: participant.id,
+        admin: participant.admin || null,
+      }));
+    }
+
+    return summary;
   }
 
   private scheduleReconnect(): void {

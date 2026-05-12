@@ -24,3 +24,15 @@ The first successful run prints a QR code in the terminal. Scan it as a linked d
 ## Current endpoints
 
 - `GET /health`: connection and session status.
+- `GET /groups`: list participating groups. Add `?include_participants=true` only when participant IDs are needed.
+
+
+## Group discovery
+
+After the linked-device login is connected, call:
+
+```bash
+curl http://127.0.0.1:3015/groups
+```
+
+Copy the target `jid` into the skill `.env` as `WHATSAPP_GROUP_JID`. Group JIDs normally end in `@g.us`.
