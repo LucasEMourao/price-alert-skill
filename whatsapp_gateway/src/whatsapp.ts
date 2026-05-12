@@ -31,6 +31,12 @@ export type GroupSummary = {
   participants?: Array<{ jid: string; admin: string | null }>;
 };
 
+export type SendResult = {
+  success: true;
+  message_id: string | null;
+  jid: string;
+};
+
 export class BaileysGateway {
   private socket: WASocket | null = null;
   private connecting = false;
@@ -71,6 +77,21 @@ export class BaileysGateway {
     return Object.values(groups)
       .map((metadata) => this.toGroupSummary(metadata, includeParticipants))
       .sort((left, right) => left.subject.localeCompare(right.subject, "pt-BR"));
+  }
+
+  async sendText(jid: string, message: string): Promise<SendResult> {
+    const socket = this.requireConnectedSocket();
+    const result = await socket.sendMessage(jid, { text: message });
+    return { success: true, message_id: result?.key?.id || null, jid };
+  }
+
+  async sendImage(jid: string, imageUrl: string, caption: string): Promise<SendResult> {
+    const socket = this.requireConnectedSocket();
+    const result = await socket.sendMessage(jid, {
+      image: { url: imageUrl },
+      caption,
+    });
+    return { success: true, message_id: result?.key?.id || null, jid };
   }
 
   async stop(): Promise<void> {

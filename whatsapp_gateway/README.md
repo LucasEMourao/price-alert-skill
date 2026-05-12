@@ -25,6 +25,8 @@ The first successful run prints a QR code in the terminal. Scan it as a linked d
 
 - `GET /health`: connection and session status.
 - `GET /groups`: list participating groups. Add `?include_participants=true` only when participant IDs are needed.
+- `POST /send-text`: send `{ "group_jid": "...@g.us", "message": "..." }`.
+- `POST /send-image`: send `{ "group_jid": "...@g.us", "image_url": "https://...", "caption": "..." }`.
 
 
 ## Group discovery
@@ -36,3 +38,20 @@ curl http://127.0.0.1:3015/groups
 ```
 
 Copy the target `jid` into the skill `.env` as `WHATSAPP_GROUP_JID`. Group JIDs normally end in `@g.us`.
+
+
+## Sending smoke checks
+
+After the gateway is connected and `WHATSAPP_GROUP_JID` is known:
+
+```bash
+curl -X POST http://127.0.0.1:3015/send-text \
+  -H 'Content-Type: application/json' \
+  -d '{"group_jid":"120363000000000000@g.us","message":"Baileys smoke test"}'
+```
+
+```bash
+curl -X POST http://127.0.0.1:3015/send-image \
+  -H 'Content-Type: application/json' \
+  -d '{"group_jid":"120363000000000000@g.us","image_url":"https://example.com/image.jpg","caption":"Oferta teste"}'
+```
