@@ -144,6 +144,8 @@ Target environment variables:
 - `BAILEYS_PORT=3015`
 - `BAILEYS_AUTH_DIR=.agents/skills/price-alert-skill/data/baileys_auth`
 - `BAILEYS_LOG_LEVEL=info`
+- `BAILEYS_NODE_BIN=/absolute/path/to/node` when cron cannot resolve `node`
+- `BAILEYS_NPM_BIN=/absolute/path/to/npm` when cron cannot resolve `npm`
 
 Expected operating order after the gateway exists:
 
@@ -166,6 +168,10 @@ The Baileys gateway scripts use:
 - PID file: `data/baileys_gateway.pid`
 - Auth/session directory: `data/baileys_auth` by default
 - Supervisor log: `logs/baileys-supervisor-YYYY-MM-DD.log`
+
+If the gateway works in an interactive shell but not from cron, check the supervisor log first. A common cause is a reduced cron `PATH`; use `command -v node` and `command -v npm` from the target Linux account, then set `BAILEYS_NODE_BIN` and `BAILEYS_NPM_BIN` in `.env` if needed.
+
+When the Baileys backend is down or disconnected, the Python sender now keeps the selected offer pending and reports it as deferred. This avoids burning queue retries during an infrastructure outage. In that situation, inspect both `logs/sender-YYYY-MM-DD.log` and `logs/baileys-supervisor-YYYY-MM-DD.log`.
 
 Example `systemd` shape for a Linux server:
 
