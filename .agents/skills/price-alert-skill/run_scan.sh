@@ -4,6 +4,7 @@ set -euo pipefail
 export TZ="${TZ:-America/Sao_Paulo}"
 
 skill_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+env_file="${SCAN_RUN_ENV_FILE:-$skill_root/.env}"
 python="${SCAN_RUN_PYTHON:-$skill_root/.venv/bin/python}"
 script="${SCAN_RUN_SCRIPT:-$skill_root/scripts/scan_deals.py}"
 log_dir="${SCAN_RUN_LOG_DIR:-$skill_root/logs}"
@@ -11,8 +12,16 @@ log_file="$log_dir/scan-$(date +%F).log"
 data_dir="${SCAN_RUN_DATA_DIR:-$skill_root/data}"
 lock_dir="${SCAN_RUN_LOCK_DIR:-$data_dir/scan.lock}"
 lock_pid_file="$lock_dir/pid"
-scan_profile="${PRICE_ALERT_SCAN_PROFILE:-}"
-scan_categories="${PRICE_ALERT_SCAN_CATEGORIES:-}"
+
+read_env_value() {
+    local key="$1"
+
+    [ -f "$env_file" ] || return 0
+    sed -n "s/^${key}=//p" "$env_file" | tail -n 1 | sed "s/^\"//; s/\"$//; s/^'//; s/'$//"
+}
+
+scan_profile="${PRICE_ALERT_SCAN_PROFILE:-$(read_env_value PRICE_ALERT_SCAN_PROFILE)}"
+scan_categories="${PRICE_ALERT_SCAN_CATEGORIES:-$(read_env_value PRICE_ALERT_SCAN_CATEGORIES)}"
 resolved_scan_profile="${scan_profile:-tech}"
 category_state_file="${SCAN_RUN_CATEGORY_STATE_FILE:-$data_dir/scan_categories_${resolved_scan_profile}.state}"
 
@@ -59,7 +68,7 @@ if ! acquire_scan_lock; then
 fi
 
 resolve_category_batch_size() {
-    local raw_batch_size="${PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE:-}"
+    local raw_batch_size="${PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE:-$(read_env_value PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE)}"
     if [ -n "$raw_batch_size" ]; then
         if ! [[ "$raw_batch_size" =~ ^[0-9]+$ ]]; then
             echo "PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE must be an integer greater than or equal to zero." >&2

@@ -79,6 +79,42 @@ def test_run_scan_passes_expected_scan_arguments(tmp_path):
     ]
 
 
+def test_run_scan_reads_profile_and_categories_from_env_file(tmp_path):
+    marker = tmp_path / "calls.jsonl"
+    env_file = tmp_path / "scan.env"
+    _write_fake_scan(tmp_path / "scan_fake.py", marker)
+    env_file.write_text(
+        "\n".join(
+            [
+                "PRICE_ALERT_SCAN_PROFILE=beauty",
+                "PRICE_ALERT_SCAN_CATEGORIES=beleza_perfumes",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = _run_scan(
+        tmp_path,
+        SCAN_RUN_ENV_FILE=_shell_path(env_file),
+    )
+
+    assert result.returncode == 0
+    captured_args = json.loads(marker.read_text(encoding="utf-8").splitlines()[0])
+    assert captured_args == [
+        "--all",
+        "--profile",
+        "beauty",
+        "--query-categories",
+        "beleza_perfumes",
+        "--scan-only",
+        "--min-discount",
+        "10",
+        "--max-results",
+        "8",
+    ]
+
+
 def test_run_scan_skips_when_previous_scan_still_holds_lock(tmp_path):
     marker = tmp_path / "calls.jsonl"
     logs_dir = tmp_path / "logs"
