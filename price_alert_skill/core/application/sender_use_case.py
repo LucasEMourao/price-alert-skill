@@ -47,6 +47,7 @@ def run_sender_loop(
     max_messages: int | None,
     idle_exit_seconds: int | None,
     product_profile: str | None,
+    send_interval_seconds: float,
     stop_requested_fn: Callable[[], bool],
     now_fn: Callable[[], Any],
     load_deal_queue_fn: Callable[[], dict[str, Any]],
@@ -158,6 +159,10 @@ def run_sender_loop(
 
             if max_messages is not None and results["sent"] + results["failed"] >= max_messages:
                 break
+
+            if send_interval_seconds > 0:
+                logger(f"Waiting {send_interval_seconds:g} seconds before next WhatsApp send.")
+                sleep_fn(send_interval_seconds)
 
             if not continuous:
                 continue

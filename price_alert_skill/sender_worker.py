@@ -11,6 +11,7 @@ from typing import Any
 
 from price_alert_skill.config import (
     configure_utf8_stdio,
+    resolve_whatsapp_send_interval_seconds,
     resolve_whatsapp_group,
     resolve_whatsapp_sender_backend,
 )
@@ -64,6 +65,9 @@ def _build_whatsapp_sender_adapters(backend: str | None = None):
     )
 
 _ACTIVE_WHATSAPP_SENDER_BACKEND = resolve_whatsapp_sender_backend()
+_WHATSAPP_SEND_INTERVAL_SECONDS = resolve_whatsapp_send_interval_seconds(
+    _ACTIVE_WHATSAPP_SENDER_BACKEND
+)
 
 (
     _WHATSAPP_SESSION_OPENER,
@@ -193,6 +197,8 @@ def run_sender(
     )
 
     print(f"Using WhatsApp sender backend: {_ACTIVE_WHATSAPP_SENDER_BACKEND}")
+    if _WHATSAPP_SEND_INTERVAL_SECONDS > 0:
+        print(f"Using WhatsApp send interval: {_WHATSAPP_SEND_INTERVAL_SECONDS:g}s")
 
     try:
         return application_run_sender_loop(
@@ -204,6 +210,7 @@ def run_sender(
             max_messages=max_messages,
             idle_exit_seconds=idle_exit_seconds,
             product_profile=product_profile,
+            send_interval_seconds=_WHATSAPP_SEND_INTERVAL_SECONDS,
             stop_requested_fn=_stop_requested,
             now_fn=_utc_now,
             load_deal_queue_fn=load_deal_queue,

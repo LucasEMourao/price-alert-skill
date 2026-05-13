@@ -34,6 +34,7 @@ AMAZON_AFFILIATE_TAG = os.environ.get("AMAZON_AFFILIATE_TAG", "brunoentende-20")
 WHATSAPP_GROUP = os.environ.get("WHATSAPP_GROUP", "")
 WHATSAPP_GROUP_JID = os.environ.get("WHATSAPP_GROUP_JID", "")
 WHATSAPP_SENDER_BACKEND = os.environ.get("WHATSAPP_SENDER_BACKEND", "playwright")
+WHATSAPP_SEND_INTERVAL_SECONDS = os.environ.get("WHATSAPP_SEND_INTERVAL_SECONDS", "")
 BAILEYS_GATEWAY_URL = os.environ.get("BAILEYS_GATEWAY_URL", "http://127.0.0.1:3015")
 PRICE_ALERT_RUNTIME = os.environ.get("PRICE_ALERT_RUNTIME", "auto")
 WHATSAPP_CHROME_PATH = os.environ.get("WHATSAPP_CHROME_PATH", "")
@@ -64,6 +65,24 @@ def resolve_whatsapp_sender_backend() -> str:
     if backend not in {"playwright", "baileys"}:
         raise ValueError("WHATSAPP_SENDER_BACKEND must be one of: playwright, baileys")
     return backend
+
+
+def resolve_whatsapp_send_interval_seconds(backend: str | None = None) -> float:
+    """Resolve the pause between consecutive WhatsApp sends."""
+    raw_value = WHATSAPP_SEND_INTERVAL_SECONDS.strip()
+    if raw_value:
+        try:
+            interval_seconds = float(raw_value)
+        except ValueError as exc:
+            raise ValueError("WHATSAPP_SEND_INTERVAL_SECONDS must be a number") from exc
+        if interval_seconds < 0:
+            raise ValueError("WHATSAPP_SEND_INTERVAL_SECONDS must be zero or greater")
+        return interval_seconds
+
+    resolved_backend = (backend or resolve_whatsapp_sender_backend()).strip().lower()
+    if resolved_backend == "baileys":
+        return 30.0
+    return 0.0
 
 
 def resolve_whatsapp_group_jid() -> str:

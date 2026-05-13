@@ -12,6 +12,7 @@ window_start="${BOOT_RECOVERY_WINDOW_START:-0800}"
 window_end="${BOOT_RECOVERY_WINDOW_END:-2330}"
 scan_recent_seconds="${BOOT_RECOVERY_SCAN_RECENT_SECONDS:-1800}"
 scan_max_runtime_seconds="${BOOT_RECOVERY_SCAN_MAX_RUNTIME_SECONDS:-3600}"
+scan_process_pattern="${BOOT_RECOVERY_SCAN_PROCESS_PATTERN:-[s]can_deals\.py([[:space:]]|$)}"
 now_override="${BOOT_RECOVERY_NOW:-}"
 
 mkdir -p "$log_dir" "$data_dir"
@@ -49,7 +50,7 @@ latest_scan_log() {
 }
 
 scan_pids() {
-    pgrep -f '[s]can_deals\.py([[:space:]]|$)' || true
+    pgrep -f "$scan_process_pattern" || true
 }
 
 scan_is_healthy() {

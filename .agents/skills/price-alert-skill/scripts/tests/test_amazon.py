@@ -65,7 +65,8 @@ class TestAmazonSearchHTMLParser:
             <h2><a href="/dp/B0TEST123"><span>Mouse Gamer Logitech</span></a></h2>
             <img class="s-image" src="https://example.com/image.jpg" />
             <span class="a-price"><span class="a-offscreen">R$ 149,90</span></span>
-            <span class="a-price a-text-price"><span class="a-offscreen">R$ 199,90</span></span>
+            <span>De: </span>
+            <span class="a-price a-text-price" data-a-strike="true"><span class="a-offscreen">R$ 199,90</span></span>
         </div>
         """
         parser = AmazonSearchHTMLParser(max_results=5)

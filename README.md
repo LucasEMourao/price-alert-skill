@@ -103,6 +103,7 @@ Operational guardrails:
 - keep exactly one sender consuming the queue;
 - when using Baileys, start `./ensure_baileys_gateway.sh` before `./ensure_sender.sh`;
 - stop in reverse order: `./stop_sender.sh`, then `./stop_baileys_gateway.sh`;
+- keep a pause between consecutive sends; `WHATSAPP_SEND_INTERVAL_SECONDS` defaults to 30 seconds for Baileys and 0 for Playwright;
 - keep Playwright installed and documented as rollback until Baileys passes a 24h soak test;
 - treat Baileys as a non-official WhatsApp Web/Linked Devices integration, with risk of session loss or protocol breakage;
 - validate every sprint with tests or targeted manual checks before committing.

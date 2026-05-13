@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from price_alert_skill.deal_selection import prepare_deal_for_selection
+from price_alert_skill import sender_worker
 from price_alert_skill.sender_worker import (
     _acquire_sender_lock,
     _release_sender_lock,
@@ -307,3 +308,62 @@ def test_run_sender_logs_active_whatsapp_backend(
         for call in mock_print.call_args_list
         if call.args
     )
+
+
+def test_run_sender_waits_between_consecutive_messages(monkeypatch):
+    first = _deal(
+        title="Fonte 750W",
+        url="https://example.com/fonte",
+        product_url="https://example.com/fonte",
+        query="fonte 750w",
+        source_query="fonte 750w",
+        current_price=399.0,
+        previous_price=599.0,
+        discount_pct=33.0,
+    )
+    first["lane"] = "priority"
+    first["offer_key"] = "offer-1"
+    first["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    first["last_seen_scan"] = 1
+    second = _deal(
+        title="Perfume Feminino",
+        url="https://example.com/perfume",
+        product_url="https://example.com/perfume",
+        query="perfume feminino",
+        source_query="perfume feminino",
+        current_price=129.9,
+        previous_price=199.9,
+        discount_pct=35.0,
+    )
+    second["lane"] = "priority"
+    second["offer_key"] = "offer-2"
+    second["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    second["last_seen_scan"] = 1
+    queue = _queue_with(priority=[first, second])
+    sleeps = []
+
+    monkeypatch.setattr(sender_worker, "_WHATSAPP_SEND_INTERVAL_SECONDS", 30.0)
+    monkeypatch.setattr(sender_worker, "_acquire_sender_lock", lambda: 123)
+    monkeypatch.setattr(sender_worker, "_release_sender_lock", lambda fd: None)
+    monkeypatch.setattr(sender_worker, "open_whatsapp_session", lambda **kwargs: {"page": object(), "group_name": "Grupo"})
+    monkeypatch.setattr(sender_worker, "close_whatsapp_session", lambda session: None)
+    monkeypatch.setattr(sender_worker, "load_deal_queue", lambda: queue)
+    monkeypatch.setattr(sender_worker, "save_deal_queue", lambda saved_queue: None)
+    monkeypatch.setattr(sender_worker, "load_sent_deals", lambda: {"sent": {}, "last_cleaned": None})
+    monkeypatch.setattr(sender_worker, "mark_deals_as_sent", lambda deals, **kwargs: kwargs.get("sent_data", {}))
+    monkeypatch.setattr(sender_worker.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(
+        sender_worker,
+        "send_deal_in_open_chat",
+        lambda page, deal, **kwargs: {
+            "success": True,
+            "dedup_key": deal["offer_key"],
+            "title": deal["title"],
+            "url": deal["url"],
+        },
+    )
+
+    results = sender_worker.run_sender(group_name="Grupo", max_messages=2)
+
+    assert results["sent"] == 2
+    assert sleeps == [30.0]

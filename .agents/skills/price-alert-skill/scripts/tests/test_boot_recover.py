@@ -18,6 +18,7 @@ def _run_boot_recover(tmp_path: Path, **env_overrides: str) -> subprocess.Comple
             "BOOT_RECOVERY_DATA_DIR": str(tmp_path / "data"),
             "BOOT_RECOVERY_RUN_SCAN_CMD": str(tmp_path / "run_scan_fake.sh"),
             "BOOT_RECOVERY_ENSURE_SENDER_CMD": str(tmp_path / "ensure_sender_fake.sh"),
+            "BOOT_RECOVERY_SCAN_PROCESS_PATTERN": str(tmp_path / "scan_deals.py"),
             "BOOT_RECOVERY_NOW": "2026-05-11T16:30:00-03:00",
         }
     )

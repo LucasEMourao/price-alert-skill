@@ -129,6 +129,7 @@ The WhatsApp sender migration is intentionally staged. The current Playwright se
 Target environment variables:
 
 - `WHATSAPP_SENDER_BACKEND=playwright|baileys`
+- `WHATSAPP_SEND_INTERVAL_SECONDS=<seconds>`; empty means `30` for Baileys and `0` for Playwright
 - `WHATSAPP_GROUP_JID=<group-id>@g.us`
 - `BAILEYS_PORT=3015`
 - `BAILEYS_AUTH_DIR=.agents/skills/price-alert-skill/data/baileys_auth`
