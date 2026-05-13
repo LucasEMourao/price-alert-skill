@@ -13,6 +13,35 @@ from price_alert_skill.config import (
 )
 
 
+class BaileysBackendUnavailableError(RuntimeError):
+    """Raised when the shared Baileys gateway cannot serve requests."""
+
+    backend_unavailable = True
+
+
+def _is_backend_unavailable_reason(
+    reason: str | None,
+    *,
+    status_code: int | None = None,
+) -> bool:
+    normalized = (reason or "").strip().lower()
+    if not normalized:
+        return bool(status_code and status_code >= 500)
+
+    if normalized.startswith("baileys_not_connected"):
+        return True
+    if normalized.startswith("baileys_gateway_unreachable"):
+        return True
+    if normalized.startswith("baileys_gateway_invalid"):
+        return True
+    if normalized.startswith("baileys gateway request failed:"):
+        return True
+    if normalized.startswith("gateway_http_5"):
+        return True
+
+    return bool(status_code and status_code >= 500)
+
+
 @dataclass(frozen=True)
 class BaileysGatewayClient:
     """Small HTTP client for the local Baileys gateway."""
@@ -25,9 +54,19 @@ class BaileysGatewayClient:
         return f"{self.gateway_url.rstrip('/')}/{path.lstrip('/')}"
 
     def health(self) -> dict[str, Any]:
-        response = requests.get(self._url("/health"), timeout=self.timeout_seconds)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = requests.get(self._url("/health"), timeout=self.timeout_seconds)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BaileysBackendUnavailableError(
+                f"baileys_gateway_unreachable:{exc}"
+            ) from exc
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise BaileysBackendUnavailableError(
+                "baileys_gateway_invalid_health_response"
+            ) from exc
 
     def send_image(self, *, image_url: str, caption: str) -> dict[str, Any]:
         response = requests.post(
@@ -45,9 +84,14 @@ class BaileysGatewayClient:
             payload = {}
         if response.ok:
             return payload
+        reason = payload.get("reason") or f"gateway_http_{response.status_code}"
         return {
             "success": False,
-            "reason": payload.get("reason") or f"gateway_http_{response.status_code}",
+            "reason": reason,
+            "backend_unavailable": _is_backend_unavailable_reason(
+                reason,
+                status_code=response.status_code,
+            ),
         }
 
 
@@ -73,7 +117,7 @@ class BaileysSessionOpenerAdapter:
         whatsapp_state = health.get("whatsapp", {})
         if not whatsapp_state.get("connected"):
             connection = whatsapp_state.get("connection", "unknown")
-            raise RuntimeError(f"baileys_not_connected:{connection}")
+            raise BaileysBackendUnavailableError(f"baileys_not_connected:{connection}")
 
         return {
             "page": client,
@@ -117,6 +161,7 @@ class BaileysDealChatSenderAdapter:
                 "title": title,
                 "url": deal_url,
                 "reason": "invalid baileys gateway session",
+                "backend_unavailable": False,
             }
 
         if not image_url:
@@ -126,6 +171,7 @@ class BaileysDealChatSenderAdapter:
                 "title": title,
                 "url": deal_url,
                 "reason": "no image_url",
+                "backend_unavailable": False,
             }
 
         try:
@@ -137,6 +183,7 @@ class BaileysDealChatSenderAdapter:
                 "title": title,
                 "url": deal_url,
                 "reason": f"baileys gateway request failed: {exc}",
+                "backend_unavailable": True,
             }
 
         if payload.get("success"):
@@ -154,4 +201,5 @@ class BaileysDealChatSenderAdapter:
             "title": title,
             "url": deal_url,
             "reason": payload.get("reason") or "baileys send failed",
+            "backend_unavailable": bool(payload.get("backend_unavailable")),
         }

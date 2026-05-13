@@ -7,6 +7,14 @@ from traceback import print_exc
 from typing import Any, Callable
 
 
+def _is_backend_unavailable_error(exc: Exception) -> bool:
+    return bool(getattr(exc, "backend_unavailable", False))
+
+
+def _is_backend_unavailable_result(result: dict[str, Any]) -> bool:
+    return bool(result.get("backend_unavailable"))
+
+
 def select_next_deal(
     queue: dict[str, Any],
     *,
@@ -68,7 +76,13 @@ def run_sender_loop(
     logger: Callable[[str], None] = print,
 ) -> dict[str, Any]:
     """Run the single sender loop once or continuously."""
-    results = {"sent": 0, "failed": 0, "errors": [], "skipped_due_to_lock": False}
+    results = {
+        "sent": 0,
+        "failed": 0,
+        "deferred": 0,
+        "errors": [],
+        "skipped_due_to_lock": False,
+    }
     session = None
     idle_started_at = monotonic_now()
     non_urgent_index = 0
@@ -118,6 +132,16 @@ def run_sender_loop(
                         reset_session=reset_session,
                     )
                 except Exception as exc:
+                    if _is_backend_unavailable_error(exc):
+                        logger(f"  WARNING: WhatsApp backend unavailable while opening session: {exc}")
+                        results["deferred"] += 1
+                        mark_sender_tick_fn(queue, now_fn())
+                        save_deal_queue_fn(queue)
+                        if not continuous:
+                            break
+                        sleep_fn(poll_seconds)
+                        continue
+
                     logger(f"  WARNING: Failed to open WhatsApp session: {exc}")
                     print_exc()
                     if not continuous:
@@ -138,19 +162,39 @@ def run_sender_loop(
             )
 
             refreshed_queue = prune_expired_entries_fn(load_deal_queue_fn(), now=now_fn())
+            if _is_backend_unavailable_result(attempt_result):
+                logger(
+                    "  WARNING: WhatsApp backend unavailable while sending "
+                    f"{attempt_result.get('title', deal.get('title', 'Unknown'))}: "
+                    f"{attempt_result.get('reason', 'unknown backend failure')}"
+                )
+                results["deferred"] += 1
+                mark_sender_tick_fn(refreshed_queue, now_fn())
+                save_deal_queue_fn(refreshed_queue)
+                close_whatsapp_session_fn(session)
+                session = None
+                if not continuous:
+                    break
+                sleep_fn(poll_seconds)
+                continue
+
             if attempt_result["success"]:
                 remove_entry_by_offer_key_fn(refreshed_queue, deal["offer_key"])
                 sent_data = load_sent_deals_fn()
                 mark_deals_as_sent_fn([deal], sent_data=sent_data, auto_save=True)
                 results["sent"] += 1
             else:
+                logger(
+                    f"  ERROR: Failed to send {attempt_result.get('title', deal.get('title', 'Unknown'))}: "
+                    f"{attempt_result.get('reason', 'unknown send failure')}"
+                )
                 mark_deal_failed_fn(refreshed_queue, deal["offer_key"], now=now_fn())
                 results["failed"] += 1
                 results["errors"].append(
                     {
-                        "title": attempt_result["title"],
-                        "url": attempt_result["url"],
-                        "reason": attempt_result["reason"],
+                        "title": attempt_result.get("title", deal.get("title", "")),
+                        "url": attempt_result.get("url", deal.get("url", "")),
+                        "reason": attempt_result.get("reason", "unknown send failure"),
                     }
                 )
 

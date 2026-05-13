@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from price_alert_skill.deal_selection import prepare_deal_for_selection
+from price_alert_skill.core.adapters.baileys_sender import BaileysBackendUnavailableError
 from price_alert_skill import sender_worker
 from price_alert_skill.sender_worker import (
     _acquire_sender_lock,
@@ -217,6 +218,130 @@ def test_run_sender_retries_session_open_in_continuous_mode(
     assert results["sent"] == 1
     assert mock_open_session.call_count == 2
     assert mock_mark_sent.call_args.args[0][0]["offer_key"] == "offer-1"
+
+
+@patch("price_alert_skill.sender_worker.print")
+@patch("price_alert_skill.sender_worker.time.sleep", return_value=None)
+@patch("price_alert_skill.sender_worker._stop_requested", side_effect=[False, True])
+@patch("price_alert_skill.sender_worker._release_sender_lock")
+@patch("price_alert_skill.sender_worker._acquire_sender_lock", return_value=123)
+@patch("price_alert_skill.sender_worker.close_whatsapp_session")
+@patch("price_alert_skill.sender_worker.mark_deal_failed")
+@patch("price_alert_skill.sender_worker.save_deal_queue")
+@patch("price_alert_skill.sender_worker.load_deal_queue")
+def test_run_sender_defers_when_backend_unavailable_while_opening_session(
+    mock_load_queue,
+    mock_save_queue,
+    mock_mark_failed,
+    _mock_close_session,
+    _mock_lock,
+    _mock_unlock,
+    _mock_stop_requested,
+    _mock_sleep,
+    mock_print,
+):
+    priority = _deal(
+        title="Fonte 750W",
+        url="https://example.com/fonte",
+        product_url="https://example.com/fonte",
+        query="fonte 750w",
+        source_query="fonte 750w",
+        current_price=399.0,
+        previous_price=599.0,
+        discount_pct=33.0,
+    )
+    priority["lane"] = "priority"
+    priority["offer_key"] = "offer-1"
+    priority["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    priority["last_seen_scan"] = 1
+
+    mock_load_queue.return_value = _queue_with(priority=[priority])
+    error = BaileysBackendUnavailableError("baileys_not_connected:close")
+
+    with patch("price_alert_skill.sender_worker.open_whatsapp_session", side_effect=error):
+        results = run_sender(group_name="Grupo", continuous=True, poll_seconds=0)
+
+    assert results["sent"] == 0
+    assert results["failed"] == 0
+    assert results["deferred"] == 1
+    assert not mock_mark_failed.called
+    assert mock_save_queue.called
+    assert any(
+        "backend unavailable while opening session" in call.args[0]
+        for call in mock_print.call_args_list
+        if call.args
+    )
+
+
+@patch("price_alert_skill.sender_worker.print")
+@patch("price_alert_skill.sender_worker.time.sleep", return_value=None)
+@patch("price_alert_skill.sender_worker._stop_requested", side_effect=[False, True])
+@patch("price_alert_skill.sender_worker._release_sender_lock")
+@patch("price_alert_skill.sender_worker._acquire_sender_lock", return_value=123)
+@patch("price_alert_skill.sender_worker.close_whatsapp_session")
+@patch("price_alert_skill.sender_worker.open_whatsapp_session", return_value={"page": object(), "group_name": "Grupo"})
+@patch("price_alert_skill.sender_worker.mark_deals_as_sent")
+@patch("price_alert_skill.sender_worker.load_sent_deals", return_value={"sent": {}, "last_cleaned": None})
+@patch("price_alert_skill.sender_worker.mark_deal_failed")
+@patch("price_alert_skill.sender_worker.save_deal_queue")
+@patch("price_alert_skill.sender_worker.load_deal_queue")
+def test_run_sender_defers_when_backend_unavailable_during_send(
+    mock_load_queue,
+    mock_save_queue,
+    mock_mark_failed,
+    _mock_load_sent,
+    mock_mark_sent,
+    _mock_open_session,
+    mock_close_session,
+    _mock_lock,
+    _mock_unlock,
+    _mock_stop_requested,
+    _mock_sleep,
+    mock_print,
+):
+    priority = _deal(
+        title="Fonte 750W",
+        url="https://example.com/fonte",
+        product_url="https://example.com/fonte",
+        query="fonte 750w",
+        source_query="fonte 750w",
+        current_price=399.0,
+        previous_price=599.0,
+        discount_pct=33.0,
+    )
+    priority["lane"] = "priority"
+    priority["offer_key"] = "offer-1"
+    priority["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    priority["last_seen_scan"] = 1
+
+    populated_queue = _queue_with(priority=[priority])
+    mock_load_queue.side_effect = [populated_queue, populated_queue]
+
+    with patch(
+        "price_alert_skill.sender_worker.send_deal_in_open_chat",
+        return_value={
+            "success": False,
+            "dedup_key": "offer-1",
+            "title": "Fonte 750W",
+            "url": "https://example.com/fonte",
+            "reason": "baileys_not_connected:close",
+            "backend_unavailable": True,
+        },
+    ):
+        results = run_sender(group_name="Grupo", continuous=True, poll_seconds=0)
+
+    assert results["sent"] == 0
+    assert results["failed"] == 0
+    assert results["deferred"] == 1
+    assert not mock_mark_failed.called
+    assert not mock_mark_sent.called
+    assert mock_save_queue.called
+    assert mock_close_session.called
+    assert any(
+        "backend unavailable while sending" in call.args[0]
+        for call in mock_print.call_args_list
+        if call.args
+    )
 
 
 @patch("price_alert_skill.sender_worker._stop_requested", side_effect=[True])

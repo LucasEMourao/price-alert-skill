@@ -4,9 +4,13 @@ from pathlib import Path
 
 import sys
 
+import pytest
+import requests
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from price_alert_skill.core.adapters.baileys_sender import (
+    BaileysBackendUnavailableError,
     BaileysDealChatSenderAdapter,
     BaileysGatewayClient,
     BaileysSessionCloserAdapter,
@@ -198,6 +202,50 @@ def test_baileys_deal_sender_reports_gateway_error(monkeypatch):
 
     assert result["success"] is False
     assert result["reason"] == "baileys_not_connected"
+    assert result["backend_unavailable"] is True
+
+
+def test_baileys_deal_sender_flags_request_failures_as_backend_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        "price_alert_skill.core.adapters.baileys_sender.requests.post",
+        lambda *args, **kwargs: (_ for _ in ()).throw(requests.ReadTimeout("timed out")),
+    )
+
+    client = BaileysGatewayClient(
+        gateway_url="http://gateway.local",
+        group_jid="120363@g.us",
+    )
+    result = BaileysDealChatSenderAdapter()(
+        client,
+        {
+            "title": "Deal",
+            "url": "https://example.com/deal",
+            "image_url": "https://example.com/image.jpg",
+            "message": "Caption",
+        },
+        delay_between=5.0,
+        max_retries=2,
+    )
+
+    assert result["success"] is False
+    assert result["backend_unavailable"] is True
+    assert "baileys gateway request failed" in result["reason"]
+
+
+def test_baileys_session_opener_reports_gateway_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        "price_alert_skill.core.adapters.baileys_sender.resolve_whatsapp_group_jid",
+        lambda: "120363@g.us",
+    )
+    monkeypatch.setattr(
+        "price_alert_skill.core.adapters.baileys_sender.requests.get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(requests.ConnectTimeout("timed out")),
+    )
+
+    with pytest.raises(BaileysBackendUnavailableError) as excinfo:
+        BaileysSessionOpenerAdapter()(group_name="Grupo", headed=False, reset_session=False)
+
+    assert excinfo.value.backend_unavailable is True
 
 
 def test_baileys_session_opener_requires_group_jid(monkeypatch):

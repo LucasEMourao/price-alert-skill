@@ -87,7 +87,11 @@ def main(
         product_profile=args.profile,
     )
 
-    logger(f"\nResults: {results['sent']} sent, {results['failed']} failed")
+    results_line = f"\nResults: {results['sent']} sent, {results['failed']} failed"
+    deferred = int(results.get("deferred", 0) or 0)
+    if deferred > 0:
+        results_line += f", {deferred} deferred"
+    logger(results_line)
     if results["errors"]:
         for err in results["errors"]:
             logger(f"  - {err['title']}: {err['reason']}")
