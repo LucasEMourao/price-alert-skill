@@ -48,6 +48,7 @@ The Linux scripts mirror the Windows `.ps1` wrappers and write logs to `.agents/
 - Use `ensure_sender.sh` from cron to restart the sender if WSL, networking or the browser process drops during the active window.
 - The sender now re-opens the target WhatsApp group when Web leaves the active chat view before a retry.
 - `boot_recover.sh` can be used from `@reboot` to relaunch the sender and run a recovery scan only inside the active window, while checking whether the scan is already healthy.
+- `run_scan.sh` now skips overlapping triggers and rotates heavy profile categories in smaller batches before launching another browser-heavy scan.
 
 Example `@reboot` entry:
 
@@ -66,8 +67,11 @@ Useful environment variables:
 
 - `PRICE_ALERT_SCAN_PROFILE`
 - `PRICE_ALERT_SCAN_CATEGORIES`
+- `PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE`
 - `PRICE_ALERT_SEND_PROFILE`
 - `WHATSAPP_GROUP`
+
+When `PRICE_ALERT_SCAN_PROFILE=beauty` and `PRICE_ALERT_SCAN_CATEGORIES` is empty, `run_scan.sh` rotates two categories per run by default. Set `PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE` to override the batch size, or set `PRICE_ALERT_SCAN_CATEGORIES` to pin a fixed subset.
 
 ## Flow diagnostic
 
@@ -84,6 +88,7 @@ The report includes:
 - WSL RAM and swap summary
 - current GPU usage when `nvidia-smi` is available
 - CPU and RSS for the sender, scan and browser trees
+- active scan profile, explicit scan categories and effective scan batching mode
 
 Send the generated file from `logs/diagnostics/flow-*.txt` together with the server specs.
 

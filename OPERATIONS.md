@@ -22,6 +22,13 @@ This file is the quickest handoff for another agent or developer who needs to un
 
 Queue entries carry `product_profile`, which lets multiple product families coexist in the same queue/state files without mixing actual sends.
 
+The current scan load guardrails are:
+
+- explicit `PRICE_ALERT_SCAN_CATEGORIES` always wins and scans a fixed subset
+- otherwise `beauty` rotates two categories per run by default
+- other profiles stay full-profile unless `PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE` is set
+- overlapping scan triggers are ignored while an earlier scan is still running
+
 ## Linux/WSL wrappers
 
 Main scripts under `.agents/skills/price-alert-skill/`:
@@ -59,6 +66,8 @@ The current Ubuntu crontab pattern is:
 - `run_scan.sh` every 15 minutes from 08:00 through 22:45
 - final scans at 23:00 and 23:15
 - `stop_sender.sh` at 23:30
+- `run_scan.sh` now skips itself when a previous scan is still alive, preventing overlapping Chromium trees
+- when `PRICE_ALERT_SCAN_PROFILE=beauty` and `PRICE_ALERT_SCAN_CATEGORIES` is empty, `run_scan.sh` rotates two categories per run by default; use `PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE` to override
 
 Optional boot recovery hook:
 
@@ -121,6 +130,7 @@ When the flow appears stuck:
 4. Verify `crontab -l` inside Ubuntu.
 5. Verify the Ubuntu instance uptime and `systemctl status cron`.
 6. Run `./diag_flow.sh` for RAM/CPU/GPU/process snapshots.
+7. Confirm the reported scan profile, categories and batch mode match the intended pilot settings.
 
 ## Baileys migration operating plan
 

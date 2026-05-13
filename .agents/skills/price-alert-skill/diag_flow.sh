@@ -19,6 +19,20 @@ section() {
     say "== $1 =="
 }
 
+read_env_value() {
+    local key="$1"
+    local current_value="${!key:-}"
+
+    if [ -n "$current_value" ]; then
+        printf '%s' "$current_value"
+        return 0
+    fi
+
+    if [ -f "$skill_root/.env" ]; then
+        sed -n "s/^${key}=//p" "$skill_root/.env" | tail -n 1
+    fi
+}
+
 collect_descendants() {
     local root_pid="$1"
     local -a queue=("$root_pid")
@@ -117,10 +131,22 @@ else
     say "nvidia-smi not available on this host"
 fi
 
-baileys_gateway_url="${BAILEYS_GATEWAY_URL:-}"
-if [ -z "$baileys_gateway_url" ] && [ -f "$skill_root/.env" ]; then
-    baileys_gateway_url="$(sed -n 's/^BAILEYS_GATEWAY_URL=//p' "$skill_root/.env" | tail -n 1)"
+scan_profile="$(read_env_value PRICE_ALERT_SCAN_PROFILE)"
+scan_categories="$(read_env_value PRICE_ALERT_SCAN_CATEGORIES)"
+scan_category_batch_size="$(read_env_value PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE)"
+scan_profile="${scan_profile:-tech}"
+
+if [ -n "$scan_categories" ]; then
+    effective_scan_mode="fixed categories"
+elif [ -n "$scan_category_batch_size" ]; then
+    effective_scan_mode="rotating batches of ${scan_category_batch_size}"
+elif [ "$scan_profile" = "beauty" ]; then
+    effective_scan_mode="auto rotating batches of 2"
+else
+    effective_scan_mode="full profile"
 fi
+
+baileys_gateway_url="$(read_env_value BAILEYS_GATEWAY_URL)"
 baileys_gateway_url="${baileys_gateway_url:-http://127.0.0.1:${BAILEYS_PORT:-3015}}"
 baileys_gateway_url="${baileys_gateway_url%/}"
 
@@ -129,6 +155,12 @@ summarize_group "Sender" '[s]cripts/sender_worker.py|[r]un_sender.sh'
 summarize_group "Baileys gateway" '[w]hatsapp_gateway|[b]aileys|[n]ode .*dist/index.js|[t]sx .*src/index.ts'
 summarize_group "Scan" '[s]cripts/scan_deals.py|[r]un_scan.sh'
 summarize_group "Playwright" '[p]laywright/driver/node|[c]hrome-headless-shell|[c]hromium'
+
+section "Scan Config"
+say "Scan profile: ${scan_profile}"
+say "Explicit scan categories: ${scan_categories:-<all profile categories>}"
+say "Configured scan batch size: ${scan_category_batch_size:-auto}"
+say "Effective scan mode: ${effective_scan_mode}"
 
 section "Baileys Gateway Health"
 say "Health URL: ${baileys_gateway_url}/health"
