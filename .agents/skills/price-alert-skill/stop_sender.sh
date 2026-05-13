@@ -6,7 +6,7 @@ export TZ="${TZ:-America/Sao_Paulo}"
 skill_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 lock_file="$skill_root/data/sender_worker.lock"
 stop_request_file="$skill_root/data/sender_stop.request"
-supervisor_pattern="$skill_root/run_sender.sh"
+supervisor_pattern='[r]un_sender\.sh([[:space:]]|$)'
 
 deadline_seconds="${STOP_TIMEOUT_SECONDS:-180}"
 mkdir -p "$skill_root/data"
