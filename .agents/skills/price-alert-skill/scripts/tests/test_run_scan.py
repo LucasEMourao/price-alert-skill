@@ -122,3 +122,49 @@ def test_run_scan_skips_when_previous_scan_still_holds_lock(tmp_path):
 
     captured_lines = marker.read_text(encoding="utf-8").splitlines()
     assert len(captured_lines) == 1
+
+
+def test_run_scan_rotates_beauty_categories_in_small_batches(tmp_path):
+    marker = tmp_path / "calls.jsonl"
+    _write_fake_scan(tmp_path / "scan_fake.py", marker)
+
+    first = _run_scan(
+        tmp_path,
+        PRICE_ALERT_SCAN_PROFILE="beauty",
+        SCAN_RUN_AVAILABLE_CATEGORIES="beleza_perfumes,beleza_skincare,beleza_maquiagem,beleza_unhas",
+    )
+    second = _run_scan(
+        tmp_path,
+        PRICE_ALERT_SCAN_PROFILE="beauty",
+        SCAN_RUN_AVAILABLE_CATEGORIES="beleza_perfumes,beleza_skincare,beleza_maquiagem,beleza_unhas",
+    )
+
+    assert first.returncode == 0
+    assert second.returncode == 0
+    captured_lines = marker.read_text(encoding="utf-8").splitlines()
+    first_args = json.loads(captured_lines[0])
+    second_args = json.loads(captured_lines[1])
+    assert first_args == [
+        "--all",
+        "--profile",
+        "beauty",
+        "--query-categories",
+        "beleza_perfumes,beleza_skincare",
+        "--scan-only",
+        "--min-discount",
+        "10",
+        "--max-results",
+        "8",
+    ]
+    assert second_args == [
+        "--all",
+        "--profile",
+        "beauty",
+        "--query-categories",
+        "beleza_maquiagem,beleza_unhas",
+        "--scan-only",
+        "--min-discount",
+        "10",
+        "--max-results",
+        "8",
+    ]
