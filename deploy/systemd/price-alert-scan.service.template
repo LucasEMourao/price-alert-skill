@@ -1,0 +1,12 @@
+[Unit]
+Description=Price Alert marketplace scan
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__SKILL_ROOT__
+Environment=TZ=__TIMEZONE__
+ExecStart=__SKILL_ROOT__/run_scan.sh
