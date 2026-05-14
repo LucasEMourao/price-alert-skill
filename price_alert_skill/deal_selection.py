@@ -10,6 +10,7 @@ from typing import Any
 from price_alert_skill.core.domain.identity import (
     build_offer_key,
     build_product_key,
+    build_variant_family_key,
     calculate_savings_brl,
     normalize_url_for_key,
 )
@@ -323,6 +324,29 @@ def get_query_category(query: str) -> str:
     return QUERY_TO_CATEGORY.get((query or "").strip().lower(), DEFAULT_CATEGORY)
 
 
+def collapse_deals_by_product_key(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep only the strongest prepared deal for each product key."""
+    best_by_product: dict[str, dict[str, Any]] = {}
+    product_order: list[str] = []
+
+    for deal in deals:
+        product_key = str(deal.get("product_key") or "").strip()
+        if not product_key:
+            product_key = build_product_key(deal.get("product_url") or deal.get("url", ""))
+            deal["product_key"] = product_key
+
+        current = best_by_product.get(product_key)
+        if current is None:
+            best_by_product[product_key] = deal
+            product_order.append(product_key)
+            continue
+
+        if is_better_deal(deal, current):
+            best_by_product[product_key] = deal
+
+    return [best_by_product[product_key] for product_key in product_order]
+
+
 def prepare_deal_for_selection(deal: dict[str, Any]) -> dict[str, Any]:
     """Add selection metadata to a scanned deal."""
     prepared = dict(deal)
@@ -341,7 +365,17 @@ def prepare_deal_for_selection(deal: dict[str, Any]) -> dict[str, Any]:
     prepared["category"] = category
     prepared["product_profile"] = product_profile
     prepared["product_url"] = product_url
-    prepared["product_key"] = prepared.get("product_key") or build_product_key(product_url)
+    prepared["source_product_key"] = prepared.get("source_product_key") or build_product_key(product_url)
+    prepared["variant_family_key"] = prepared.get("variant_family_key") or build_variant_family_key(
+        title=str(prepared.get("title", "")),
+        marketplace=str(prepared.get("marketplace", "")),
+        category=category,
+    )
+    prepared["product_key"] = (
+        prepared.get("product_key")
+        or prepared.get("variant_family_key")
+        or prepared["source_product_key"]
+    )
     prepared["offer_key"] = prepared.get("offer_key") or build_offer_key(
         prepared["product_key"],
         current_price,

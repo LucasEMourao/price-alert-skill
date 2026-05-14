@@ -4,6 +4,7 @@ from price_alert_skill.deal_selection import (
     build_offer_key,
     build_product_key,
     classify_deal_lane,
+    collapse_deals_by_product_key,
     get_queries,
     get_query_category,
     get_query_categories,
@@ -134,6 +135,74 @@ def test_prepare_deal_for_selection_tags_beauty_profile():
 
     assert deal["category"] == "beleza_perfumes"
     assert deal["product_profile"] == "beauty"
+
+
+def test_prepare_deal_for_selection_collapses_makeup_variant_codes_into_family_key():
+    first = prepare_deal_for_selection(
+        _base_deal(
+            title="VULT PO COMPACTO TRADICIONAL V430 9g",
+            url="https://www.amazon.com.br/dp/B077BY4MWR?tag=foo",
+            product_url="https://www.amazon.com.br/dp/B077BY4MWR?tag=foo",
+            marketplace="amazon_br",
+            query="po compacto",
+            source_query="po compacto",
+            current_price=13.9,
+            previous_price=35.99,
+            discount_pct=61.4,
+        )
+    )
+    second = prepare_deal_for_selection(
+        _base_deal(
+            title="VULT PO COMPACTO TRADICIONAL V420 9g",
+            url="https://www.amazon.com.br/dp/B0789V3CL6?tag=foo",
+            product_url="https://www.amazon.com.br/dp/B0789V3CL6?tag=foo",
+            marketplace="amazon_br",
+            query="po compacto",
+            source_query="po compacto",
+            current_price=13.9,
+            previous_price=35.9,
+            discount_pct=61.3,
+        )
+    )
+
+    assert first["variant_family_key"] == second["variant_family_key"]
+    assert first["product_key"] == second["product_key"]
+    assert first["offer_key"] == second["offer_key"]
+    assert first["source_product_key"] != second["source_product_key"]
+
+
+def test_collapse_deals_by_product_key_keeps_best_variant_from_same_family():
+    lower = prepare_deal_for_selection(
+        _base_deal(
+            title="VULT PO COMPACTO TRADICIONAL V430 9g",
+            url="https://www.amazon.com.br/dp/B077BY4MWR",
+            product_url="https://www.amazon.com.br/dp/B077BY4MWR",
+            marketplace="amazon_br",
+            query="po compacto",
+            source_query="po compacto",
+            current_price=13.9,
+            previous_price=35.99,
+            discount_pct=61.4,
+        )
+    )
+    higher = prepare_deal_for_selection(
+        _base_deal(
+            title="VULT PO COMPACTO TRADICIONAL V420 9g",
+            url="https://www.amazon.com.br/dp/B0789V3CL6",
+            product_url="https://www.amazon.com.br/dp/B0789V3CL6",
+            marketplace="amazon_br",
+            query="po compacto",
+            source_query="po compacto",
+            current_price=12.9,
+            previous_price=35.9,
+            discount_pct=64.1,
+        )
+    )
+
+    collapsed = collapse_deals_by_product_key([lower, higher])
+
+    assert len(collapsed) == 1
+    assert collapsed[0]["title"] == "VULT PO COMPACTO TRADICIONAL V420 9g"
 
 
 def test_gpu_can_become_urgent():

@@ -17,6 +17,7 @@ def main(
     scan_all_fn: Callable[[int, float, list[str], list[str]], list[dict[str, Any]]],
     deduplicate_run_deals_fn: Callable[[list[dict[str, Any]]], list[dict[str, Any]]],
     prepare_deal_for_selection_fn: Callable[[dict[str, Any]], dict[str, Any]],
+    collapse_prepared_deals_fn: Callable[[list[dict[str, Any]]], list[dict[str, Any]]] | None = None,
     apply_affiliate_links_fn: Callable[[list[dict[str, Any]]], None],
     handle_cadence_scan_fn: Callable[[argparse.ArgumentParser, list[dict[str, Any]], argparse.Namespace, datetime], None],
     handle_legacy_flow_fn: Callable[[argparse.ArgumentParser, list[dict[str, Any]], argparse.Namespace, datetime], None],
@@ -88,6 +89,8 @@ def main(
     scanned_deals = scan_all_fn(args.max_results, args.min_discount, marketplaces, queries)
     unique_deals = deduplicate_run_deals_fn(scanned_deals)
     prepared_deals = [prepare_deal_for_selection_fn(deal) for deal in unique_deals]
+    if collapse_prepared_deals_fn is not None:
+        prepared_deals = collapse_prepared_deals_fn(prepared_deals)
     apply_affiliate_links_fn(prepared_deals)
 
     if args.scan_only:

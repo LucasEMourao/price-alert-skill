@@ -36,7 +36,11 @@ from price_alert_skill.deal_queue import (
     save_deal_queue,
     upsert_pool_deal,
 )
-from price_alert_skill.deal_selection import get_queries, prepare_deal_for_selection
+from price_alert_skill.deal_selection import (
+    collapse_deals_by_product_key,
+    get_queries,
+    prepare_deal_for_selection,
+)
 from price_alert_skill.paths import resolve_data_dir
 from price_alert_skill.utils import (
     calculate_discount,
@@ -252,6 +256,7 @@ def main() -> None:
         scan_all_fn=scan_all,
         deduplicate_run_deals_fn=deduplicate_run_deals,
         prepare_deal_for_selection_fn=prepare_deal_for_selection,
+        collapse_prepared_deals_fn=collapse_deals_by_product_key,
         apply_affiliate_links_fn=apply_affiliate_links,
         handle_cadence_scan_fn=handle_cadence_scan,
         handle_legacy_flow_fn=handle_legacy_flow,

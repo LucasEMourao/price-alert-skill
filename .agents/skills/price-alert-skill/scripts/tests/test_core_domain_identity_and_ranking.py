@@ -3,6 +3,7 @@
 from price_alert_skill.core.domain.identity import (
     build_offer_key,
     build_product_key,
+    build_variant_family_key,
     calculate_savings_brl,
     normalize_url_for_key,
 )
@@ -32,6 +33,22 @@ def test_build_offer_key_changes_with_price():
 
     assert build_offer_key(product_key, 199.9) == "example.com/p/headset|199.90"
     assert build_offer_key(product_key, None) == "example.com/p/headset"
+
+
+def test_build_variant_family_key_normalizes_makeup_shade_codes():
+    assert build_variant_family_key(
+        title="VULT PO COMPACTO TRADICIONAL V430 9g",
+        marketplace="amazon_br",
+        category="beleza_maquiagem",
+    ) == "amazon_br|beleza_maquiagem|vult po compacto tradicional 9g"
+
+
+def test_build_variant_family_key_ignores_non_variant_titles():
+    assert build_variant_family_key(
+        title="VULT BLUSH COMPACTO CORAL MATTE 3g",
+        marketplace="amazon_br",
+        category="beleza_maquiagem",
+    ) is None
 
 
 def test_calculate_savings_brl_respects_missing_or_non_discounted_prices():
