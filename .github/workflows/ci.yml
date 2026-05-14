@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: whatsapp_gateway/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+
+      - name: Run Python test suite
+        run: python -m pytest tests .agents/skills/price-alert-skill/scripts/tests
+
+      - name: Compile Python package
+        run: python -m compileall price_alert_skill
+
+      - name: Validate shell scripts
+        run: |
+          bash -n .agents/skills/price-alert-skill/setup_ubuntu.sh
+          bash -n .agents/skills/price-alert-skill/run_scan.sh
+          bash -n .agents/skills/price-alert-skill/run_sender.sh
+          bash -n .agents/skills/price-alert-skill/ensure_sender.sh
+          bash -n .agents/skills/price-alert-skill/stop_sender.sh
+          bash -n .agents/skills/price-alert-skill/run_baileys_gateway.sh
+          bash -n .agents/skills/price-alert-skill/ensure_baileys_gateway.sh
+          bash -n .agents/skills/price-alert-skill/stop_baileys_gateway.sh
+          bash -n .agents/skills/price-alert-skill/boot_recover.sh
+          bash -n .agents/skills/price-alert-skill/diag_flow.sh
+
+      - name: Install gateway dependencies
+        working-directory: whatsapp_gateway
+        run: npm ci
+
+      - name: Build WhatsApp gateway
+        working-directory: whatsapp_gateway
+        run: npm run build
