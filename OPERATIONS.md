@@ -77,6 +77,79 @@ Optional boot recovery hook:
 
 Important operational rule: cron only runs while the Ubuntu WSL instance is actually alive. If the distro is down, missed runs are not replayed automatically.
 
+## Server/systemd target
+
+The repository now carries the first production server deployment assets under `deploy/`:
+
+- `deploy/install_systemd_units.sh`
+- `deploy/verify_systemd_units.sh`
+- `deploy/deploy_server.sh`
+- `deploy/systemd/*.template`
+
+Tracked unit model:
+
+- `price-alert-runtime.target`
+- `price-alert-baileys.service`
+- `price-alert-sender.service`
+- `price-alert-runtime-start.timer`
+- `price-alert-runtime-stop.timer`
+- `price-alert-scan.service`
+- `price-alert-scan.timer`
+
+Intended server behavior:
+
+- runtime window opens at `08:00` Sao Paulo time
+- sender + Baileys stop at `23:30`
+- scans run every 15 minutes from `08:00` through `22:45`
+- final scans run at `23:00` and `23:15`
+- scan overlap protection still stays inside `run_scan.sh`
+
+Server expectations:
+
+- Ubuntu or another Linux distribution with `systemd`
+- host timezone configured to `America/Sao_Paulo`
+- repo cloned to a stable path that will become `DEPLOY_PATH`
+- production `.env` stored only on the server
+- deploy user can run `sudo -n` for `systemctl` and unit installation
+
+Useful commands on the server:
+
+```bash
+bash deploy/verify_systemd_units.sh
+sudo systemctl daemon-reload
+sudo systemctl status price-alert-runtime.target
+sudo systemctl list-timers --all | grep price-alert
+sudo journalctl -u price-alert-baileys.service -n 100 --no-pager
+sudo journalctl -u price-alert-sender.service -n 100 --no-pager
+sudo journalctl -u price-alert-scan.service -n 100 --no-pager
+```
+
+## GitHub Actions deploy flow
+
+The repo now uses two workflows:
+
+- `CI`
+  Runs on `push` and `pull_request`, executing Python tests, compile checks, shell syntax checks, rendered `systemd` verification, and the Baileys gateway build.
+- `Deploy`
+  Runs after `CI` succeeds for a `push` to `main`, connects by SSH, checks out the exact tested SHA on the server, then runs `deploy/deploy_server.sh`.
+
+Required GitHub configuration:
+
+- repository variable:
+  - `DEPLOY_PATH`
+- repository secrets:
+  - `DEPLOY_HOST`
+  - `DEPLOY_PORT`
+  - `DEPLOY_USER`
+  - `DEPLOY_SSH_KEY`
+  - optional `DEPLOY_HOST_FINGERPRINT`
+
+Rollback model:
+
+- revert the offending commit on `main` or push a corrective commit
+- let CI pass
+- allow the next Deploy workflow run to apply the corrected SHA
+
 ## WhatsApp notes
 
 - Windows and Linux can keep separate Chromium profile directories.

@@ -47,6 +47,12 @@ jobs:
           bash -n .agents/skills/price-alert-skill/stop_baileys_gateway.sh
           bash -n .agents/skills/price-alert-skill/boot_recover.sh
           bash -n .agents/skills/price-alert-skill/diag_flow.sh
+          bash -n deploy/install_systemd_units.sh
+          bash -n deploy/verify_systemd_units.sh
+          bash -n deploy/deploy_server.sh
+
+      - name: Verify rendered systemd units
+        run: bash deploy/verify_systemd_units.sh
 
       - name: Install gateway dependencies
         working-directory: whatsapp_gateway

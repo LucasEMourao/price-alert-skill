@@ -123,3 +123,54 @@ Useful Baileys gateway commands from `.agents/skills/price-alert-skill`:
 ./stop_baileys_gateway.sh
 ./diag_flow.sh
 ```
+
+## GitHub Actions and server deployment
+
+The repository now includes a production-oriented deployment path for an always-on Ubuntu server:
+
+- `.github/workflows/ci.yml`
+  Validates Python tests, compile checks, shell wrappers, rendered `systemd` units, and the Baileys gateway build.
+- `.github/workflows/deploy.yml`
+  Triggers after the CI workflow succeeds for a `push` to `main`, then deploys the exact tested SHA over SSH.
+- `deploy/install_systemd_units.sh`
+  Renders and installs the tracked `systemd` unit templates.
+- `deploy/verify_systemd_units.sh`
+  Renders the unit templates in a temp directory and runs `systemd-analyze verify` when it is available.
+- `deploy/deploy_server.sh`
+  Fetches the target ref, installs Python and Node dependencies, installs the `systemd` units, aligns the runtime window, and verifies the resulting services/timers.
+
+Expected server model:
+
+- Ubuntu/Linux host with `systemd`
+- server timezone set to `America/Sao_Paulo`
+- repo cloned once to a stable path
+- deploy user allowed to run `sudo -n systemctl ...` and install unit files under `/etc/systemd/system`
+- production `.env` kept only on the server under `.agents/skills/price-alert-skill/.env`
+
+GitHub configuration required for automatic deploy:
+
+- repository variable: `DEPLOY_PATH`
+- repository secrets:
+  - `DEPLOY_HOST`
+  - `DEPLOY_PORT`
+  - `DEPLOY_USER`
+  - `DEPLOY_SSH_KEY`
+  - optional `DEPLOY_HOST_FINGERPRINT`
+
+The server-side `systemd` model matches the current operating window:
+
+- `price-alert-runtime-start.timer` starts the runtime target at `08:00`
+- `price-alert-runtime-stop.timer` stops sender + Baileys at `23:30`
+- `price-alert-scan.timer` runs scans every 15 minutes from `08:00` through `22:45`, then once at `23:00` and `23:15`
+
+Useful server commands after the first install:
+
+```bash
+sudo systemctl status price-alert-runtime.target
+sudo systemctl status price-alert-baileys.service
+sudo systemctl status price-alert-sender.service
+sudo systemctl status price-alert-scan.timer
+sudo journalctl -u price-alert-baileys.service -n 100 --no-pager
+sudo journalctl -u price-alert-sender.service -n 100 --no-pager
+sudo journalctl -u price-alert-scan.service -n 100 --no-pager
+```
