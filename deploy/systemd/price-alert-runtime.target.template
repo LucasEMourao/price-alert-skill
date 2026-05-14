@@ -1,0 +1,4 @@
+[Unit]
+Description=Price Alert active runtime window
+Wants=price-alert-baileys.service price-alert-sender.service
+After=price-alert-baileys.service

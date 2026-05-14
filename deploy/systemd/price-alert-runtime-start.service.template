@@ -1,0 +1,6 @@
+[Unit]
+Description=Start the Price Alert runtime window
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl start price-alert-runtime.target

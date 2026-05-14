@@ -1,0 +1,18 @@
+[Unit]
+Description=Price Alert sender worker
+After=network-online.target price-alert-baileys.service
+Wants=network-online.target price-alert-baileys.service
+PartOf=price-alert-runtime.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__SKILL_ROOT__
+Environment=TZ=__TIMEZONE__
+ExecStart=__SKILL_ROOT__/run_sender.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=price-alert-runtime.target

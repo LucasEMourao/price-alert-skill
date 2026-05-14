@@ -1,0 +1,6 @@
+[Unit]
+Description=Stop the Price Alert runtime window
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl stop price-alert-runtime.target
