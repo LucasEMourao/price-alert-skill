@@ -11,6 +11,10 @@ from price_alert_skill.config import (
     resolve_baileys_gateway_url,
     resolve_whatsapp_group_jid,
 )
+from price_alert_skill.core.adapters.image_normalizer import (
+    ImageNormalizationError,
+    prepare_whatsapp_image,
+)
 
 
 class BaileysBackendUnavailableError(RuntimeError):
@@ -154,7 +158,7 @@ class BaileysDealChatSenderAdapter:
         image_url = deal.get("image_url")
         message = deal.get("message", "")
 
-        if not isinstance(page, BaileysGatewayClient):
+        if not hasattr(page, "send_image"):
             return {
                 "success": False,
                 "dedup_key": dedup_key,
@@ -175,7 +179,17 @@ class BaileysDealChatSenderAdapter:
             }
 
         try:
-            payload = page.send_image(image_url=image_url, caption=message)
+            with prepare_whatsapp_image(str(image_url)) as prepared_image_url:
+                payload = page.send_image(image_url=prepared_image_url, caption=message)
+        except ImageNormalizationError as exc:
+            return {
+                "success": False,
+                "dedup_key": dedup_key,
+                "title": title,
+                "url": deal_url,
+                "reason": f"image normalization failed: {exc}",
+                "backend_unavailable": False,
+            }
         except requests.RequestException as exc:
             return {
                 "success": False,

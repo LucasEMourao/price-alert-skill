@@ -85,6 +85,20 @@ wait_for_gateway_health() {
     return 1
 }
 
+prepare_system_packages() {
+    if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if ! command -v apt-get >/dev/null 2>&1; then
+        echo "ImageMagick not found and apt-get is unavailable." >&2
+        exit 1
+    fi
+
+    as_root apt-get update
+    as_root apt-get install -y imagemagick
+}
+
 enable_timers() {
     as_root systemctl enable "${runtime_timers[@]}" "${scan_timers[@]}"
     as_root systemctl restart "${runtime_timers[@]}" "${scan_timers[@]}"
@@ -138,6 +152,7 @@ main() {
     local gateway_url
 
     sync_repository
+    prepare_system_packages
     prepare_python_runtime
     prepare_gateway_runtime
     install_units

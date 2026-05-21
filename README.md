@@ -70,6 +70,15 @@ Useful environment variables:
 - `PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE`
 - `PRICE_ALERT_SEND_PROFILE`
 - `WHATSAPP_GROUP`
+- `PRICE_ALERT_IMAGEMAGICK_BIN`: optional path to the ImageMagick `magick` or `convert` binary used to normalize Baileys image sends.
+
+Baileys image sends are normalized through ImageMagick before delivery: product images are converted to centered `800x800` JPEGs on a white background to avoid stretched WhatsApp previews. To generate local visual stubs instead of sending to WhatsApp, run:
+
+```bash
+PRICE_ALERT_WRITE_IMAGE_STUBS=1 python -m pytest tests/test_baileys_image_stub.py
+```
+
+The generated images and manifest are written to `.pytest-tmp/whatsapp-image-stub/`.
 
 When `PRICE_ALERT_SCAN_PROFILE=beauty` and `PRICE_ALERT_SCAN_CATEGORIES` is empty, `run_scan.sh` rotates two categories per run by default. Set `PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE` to override the batch size, or set `PRICE_ALERT_SCAN_CATEGORIES` to pin a fixed subset.
 

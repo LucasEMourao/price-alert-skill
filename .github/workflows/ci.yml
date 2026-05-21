@@ -24,6 +24,11 @@ jobs:
           cache: npm
           cache-dependency-path: whatsapp_gateway/package-lock.json
 
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
