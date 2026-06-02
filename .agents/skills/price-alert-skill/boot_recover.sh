@@ -8,8 +8,8 @@ log_dir="${BOOT_RECOVERY_LOG_DIR:-$skill_root/logs}"
 data_dir="${BOOT_RECOVERY_DATA_DIR:-$skill_root/data}"
 sender_command="${BOOT_RECOVERY_ENSURE_SENDER_CMD:-$skill_root/ensure_sender.sh}"
 scan_command="${BOOT_RECOVERY_RUN_SCAN_CMD:-$skill_root/run_scan.sh}"
-window_start="${BOOT_RECOVERY_WINDOW_START:-0800}"
-window_end="${BOOT_RECOVERY_WINDOW_END:-2330}"
+window_start="${BOOT_RECOVERY_WINDOW_START:-1000}"
+window_end="${BOOT_RECOVERY_WINDOW_END:-0200}"
 scan_recent_seconds="${BOOT_RECOVERY_SCAN_RECENT_SECONDS:-1800}"
 scan_max_runtime_seconds="${BOOT_RECOVERY_SCAN_MAX_RUNTIME_SECONDS:-3600}"
 scan_process_pattern="${BOOT_RECOVERY_SCAN_PROCESS_PATTERN:-[s]can_deals\.py([[:space:]]|$)}"
@@ -42,7 +42,11 @@ current_epoch() {
 within_window() {
     local hhmm
     hhmm="$(current_hhmm)"
-    [ "$hhmm" -ge "$window_start" ] && [ "$hhmm" -le "$window_end" ]
+    if [ "$window_start" -le "$window_end" ]; then
+        [ "$hhmm" -ge "$window_start" ] && [ "$hhmm" -lt "$window_end" ]
+        return $?
+    fi
+    [ "$hhmm" -ge "$window_start" ] || [ "$hhmm" -lt "$window_end" ]
 }
 
 latest_scan_log() {

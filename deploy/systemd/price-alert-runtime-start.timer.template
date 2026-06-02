@@ -1,8 +1,8 @@
 [Unit]
-Description=Start the Price Alert runtime window at 08:00
+Description=Start the Price Alert runtime window at 10:00 UTC / 07:00 Sao Paulo
 
 [Timer]
-OnCalendar=*-*-* 08:00:00
+OnCalendar=*-*-* 10:00:00
 Persistent=false
 Unit=price-alert-runtime-start.service
 

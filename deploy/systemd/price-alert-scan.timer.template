@@ -2,9 +2,8 @@
 Description=Price Alert marketplace scan schedule
 
 [Timer]
-OnCalendar=*-*-* 08..22:00/15:00
-OnCalendar=*-*-* 23:00:00
-OnCalendar=*-*-* 23:15:00
+OnCalendar=*-*-* 10..23:00/15:00
+OnCalendar=*-*-* 00..01:00/15:00
 Persistent=false
 Unit=price-alert-scan.service
 

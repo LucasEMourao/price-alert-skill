@@ -47,7 +47,7 @@ read_env_value() {
 is_runtime_window() {
     local current_hm
     current_hm="$(TZ="$timezone" date '+%H%M')"
-    [ "$current_hm" -ge 800 ] && [ "$current_hm" -lt 2330 ]
+    [ "$current_hm" -ge 1000 ] || [ "$current_hm" -lt 200 ]
 }
 
 resolve_gateway_url() {
