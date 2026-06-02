@@ -117,7 +117,7 @@ def test_get_sendable_entries_filters_by_product_profile():
     queue = _empty_queue()
     tech = _deal()
     beauty = _deal(
-        title="Perfume Feminino Importado",
+        title="Natura Perfume Feminino Importado",
         url="https://example.com/perfume",
         product_url="https://example.com/perfume",
         query="perfume feminino",
@@ -135,6 +135,42 @@ def test_get_sendable_entries_filters_by_product_profile():
 
     assert [entry["product_profile"] for entry in tech_entries] == ["tech"]
     assert [entry["product_profile"] for entry in beauty_entries] == ["beauty"]
+
+
+def test_get_sendable_entries_filters_beauty_by_allowed_brand_names():
+    queue = _empty_queue()
+    allowed = _deal(
+        title="Natura Perfume Feminino Importado",
+        url="https://example.com/natura",
+        product_url="https://example.com/natura",
+        query="perfume feminino",
+        source_query="perfume feminino",
+        current_price=129.9,
+        previous_price=199.9,
+        discount_pct=35.0,
+    )
+    blocked = _deal(
+        title="Eudora Perfume Feminino",
+        url="https://example.com/eudora",
+        product_url="https://example.com/eudora",
+        query="perfume feminino",
+        source_query="perfume feminino",
+        current_price=129.9,
+        previous_price=199.9,
+        discount_pct=35.0,
+    )
+    scan_sequence = begin_scan_run(queue)
+    upsert_pool_deal(queue, allowed, allowed["lane"], scan_sequence=scan_sequence)
+    upsert_pool_deal(queue, blocked, blocked["lane"], scan_sequence=scan_sequence)
+
+    entries = get_sendable_entries(
+        queue,
+        "priority",
+        product_profile="beauty",
+        allowed_beauty_brand_names=("natura",),
+    )
+
+    assert [entry["allowed_brand"] for entry in entries] == ["Natura"]
 
 
 def test_missing_product_profile_is_treated_as_tech_for_migration():

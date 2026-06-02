@@ -77,7 +77,7 @@ def test_select_next_deal_can_filter_by_product_profile():
     tech["last_seen_at"] = datetime.now(timezone.utc).isoformat()
     tech["last_seen_scan"] = 1
     beauty = _deal(
-        title="Perfume Feminino Importado",
+        title="Natura Perfume Feminino Importado",
         url="https://example.com/perfume",
         product_url="https://example.com/perfume",
         query="perfume feminino",
@@ -451,7 +451,7 @@ def test_run_sender_waits_between_consecutive_messages(monkeypatch):
     first["last_seen_at"] = datetime.now(timezone.utc).isoformat()
     first["last_seen_scan"] = 1
     second = _deal(
-        title="Perfume Feminino",
+        title="Natura Perfume Feminino",
         url="https://example.com/perfume",
         product_url="https://example.com/perfume",
         query="perfume feminino",

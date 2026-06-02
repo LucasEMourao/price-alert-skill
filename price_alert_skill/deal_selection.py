@@ -14,6 +14,9 @@ from price_alert_skill.core.domain.identity import (
     calculate_savings_brl,
     normalize_url_for_key,
 )
+from price_alert_skill.core.domain.brand_filter import (
+    passes_beauty_brand_filter,
+)
 from price_alert_skill.core.domain.lane_rules import (
     ACTIVE_LANES,
     CATEGORY_RULES,
@@ -347,7 +350,11 @@ def collapse_deals_by_product_key(deals: list[dict[str, Any]]) -> list[dict[str,
     return [best_by_product[product_key] for product_key in product_order]
 
 
-def prepare_deal_for_selection(deal: dict[str, Any]) -> dict[str, Any]:
+def prepare_deal_for_selection(
+    deal: dict[str, Any],
+    *,
+    allowed_beauty_brand_names: Iterable[str] | None = None,
+) -> dict[str, Any]:
     """Add selection metadata to a scanned deal."""
     prepared = dict(deal)
     source_query = prepared.get("source_query") or prepared.get("query", "")
@@ -384,7 +391,15 @@ def prepare_deal_for_selection(deal: dict[str, Any]) -> dict[str, Any]:
     if prepared["savings_brl"] is None:
         prepared["savings_brl"] = calculate_savings_brl(current_price, previous_price)
 
-    prepared["quality_passed"] = passes_quality_filters(prepared)
+    brand_match = passes_beauty_brand_filter(
+        prepared,
+        allowed_brand_names=allowed_beauty_brand_names,
+    )
+    prepared["brand_filter_passed"] = brand_match.passed
+    prepared["allowed_brand"] = brand_match.brand
+    prepared["allowed_brand_alias"] = brand_match.alias
+
+    prepared["quality_passed"] = passes_quality_filters(prepared) and brand_match.passed
     prepared["lane"] = classify_deal_lane(prepared)
     prepared["is_super_promo"] = prepared["lane"] == "urgent"
     return prepared

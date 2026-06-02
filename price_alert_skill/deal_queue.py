@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Any
 
@@ -194,6 +195,7 @@ def get_sendable_entries(
     *,
     now: datetime | str | None = None,
     product_profile: str | None = None,
+    allowed_beauty_brand_names: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Return pending entries whose retry backoff has elapsed."""
     return _QUEUE_REPOSITORY.get_sendable_entries(
@@ -201,4 +203,5 @@ def get_sendable_entries(
         lane,
         now=now,
         product_profile=product_profile,
+        allowed_beauty_brand_names=allowed_beauty_brand_names,
     )

@@ -11,6 +11,7 @@ from typing import Any
 
 from price_alert_skill.config import (
     configure_utf8_stdio,
+    resolve_allowed_beauty_brand_names,
     resolve_whatsapp_send_interval_seconds,
     resolve_whatsapp_group,
     resolve_whatsapp_sender_backend,
@@ -166,9 +167,25 @@ def _select_next_deal(
         non_urgent_index=non_urgent_index,
         now=now,
         product_profile=product_profile,
-        get_sendable_entries_fn=get_sendable_entries,
+        get_sendable_entries_fn=_get_sendable_entries_for_sender,
         sort_deals_for_sending_fn=sort_deals_for_sending,
         non_urgent_lane_sequence=tuple(CADENCE_CONFIG["non_urgent_lane_sequence"]),
+    )
+
+
+def _get_sendable_entries_for_sender(
+    queue: dict[str, Any],
+    lane: str,
+    *,
+    now: datetime | str | None = None,
+    product_profile: str | None = None,
+) -> list[dict[str, Any]]:
+    return get_sendable_entries(
+        queue,
+        lane,
+        now=now,
+        product_profile=product_profile,
+        allowed_beauty_brand_names=resolve_allowed_beauty_brand_names(),
     )
 
 
@@ -217,7 +234,7 @@ def run_sender(
             prune_expired_entries_fn=prune_expired_entries,
             mark_sender_tick_fn=mark_sender_tick,
             save_deal_queue_fn=save_deal_queue,
-            get_sendable_entries_fn=get_sendable_entries,
+            get_sendable_entries_fn=_get_sendable_entries_for_sender,
             sort_deals_for_sending_fn=sort_deals_for_sending,
             non_urgent_lane_sequence=tuple(CADENCE_CONFIG["non_urgent_lane_sequence"]),
             open_whatsapp_session_fn=open_whatsapp_session,

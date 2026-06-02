@@ -8,7 +8,11 @@ import argparse
 from datetime import datetime, timezone
 from typing import Any
 
-from price_alert_skill.config import configure_utf8_stdio, resolve_whatsapp_group
+from price_alert_skill.config import (
+    configure_utf8_stdio,
+    resolve_allowed_beauty_brand_names,
+    resolve_whatsapp_group,
+)
 from price_alert_skill.core.adapters.amazon_scanner import AmazonMarketplaceScanner
 from price_alert_skill.core.adapters.meli_affiliate_links import MeliAffiliateLinkGenerator
 from price_alert_skill.core.adapters.mercadolivre_scanner import (
@@ -114,6 +118,14 @@ def scan_all(
 def deduplicate_run_deals(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deduplicate deals within the same scan run by product URL."""
     return application_deduplicate_run_deals(deals)
+
+
+def prepare_deal_for_scan_selection(deal: dict[str, Any]) -> dict[str, Any]:
+    """Add selection metadata using the runtime beauty brand allowlist."""
+    return prepare_deal_for_selection(
+        deal,
+        allowed_beauty_brand_names=resolve_allowed_beauty_brand_names(),
+    )
 
 
 def apply_affiliate_links(deals: list[dict[str, Any]]) -> None:
@@ -255,7 +267,7 @@ def main() -> None:
         get_queries_fn=get_queries,
         scan_all_fn=scan_all,
         deduplicate_run_deals_fn=deduplicate_run_deals,
-        prepare_deal_for_selection_fn=prepare_deal_for_selection,
+        prepare_deal_for_selection_fn=prepare_deal_for_scan_selection,
         collapse_prepared_deals_fn=collapse_deals_by_product_key,
         apply_affiliate_links_fn=apply_affiliate_links,
         handle_cadence_scan_fn=handle_cadence_scan,

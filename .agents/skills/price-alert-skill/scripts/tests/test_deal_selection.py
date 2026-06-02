@@ -124,7 +124,7 @@ def test_prepare_deal_for_selection_builds_keys_and_lane():
 def test_prepare_deal_for_selection_tags_beauty_profile():
     deal = prepare_deal_for_selection(
         _base_deal(
-            title="Perfume Feminino Importado",
+            title="Natura Perfume Feminino Importado",
             query="perfume feminino",
             source_query="perfume feminino",
             current_price=129.9,
@@ -135,6 +135,27 @@ def test_prepare_deal_for_selection_tags_beauty_profile():
 
     assert deal["category"] == "beleza_perfumes"
     assert deal["product_profile"] == "beauty"
+    assert deal["brand_filter_passed"] is True
+    assert deal["allowed_brand"] == "Natura"
+
+
+def test_prepare_deal_for_selection_discards_beauty_brand_outside_allowlist():
+    deal = prepare_deal_for_selection(
+        _base_deal(
+            title="Perfume Feminino Importado Generico",
+            query="perfume feminino",
+            source_query="perfume feminino",
+            current_price=129.9,
+            previous_price=299.9,
+            discount_pct=56.7,
+        )
+    )
+
+    assert deal["product_profile"] == "beauty"
+    assert deal["brand_filter_passed"] is False
+    assert deal["allowed_brand"] is None
+    assert deal["quality_passed"] is False
+    assert deal["lane"] == "discarded"
 
 
 def test_prepare_deal_for_selection_collapses_makeup_variant_codes_into_family_key():

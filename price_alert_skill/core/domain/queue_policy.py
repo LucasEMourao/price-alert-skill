@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from collections.abc import Iterable
 from typing import Any
 
+from .brand_filter import passes_beauty_brand_filter
 from .types import ACTIVE_LANES
 
 
@@ -263,6 +265,7 @@ def get_sendable_entries(
     *,
     now: datetime | str | None = None,
     product_profile: str | None = None,
+    allowed_beauty_brand_names: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Return pending entries whose retry backoff has elapsed."""
     now_dt = parse_iso(to_iso(now)) or utc_now()
@@ -270,8 +273,17 @@ def get_sendable_entries(
     selected_profile = (product_profile or "").strip().lower()
     sendable = []
     for entry in queue.get(pool_name, []):
-        entry_profile = str(entry.get("product_profile") or DEFAULT_PRODUCT_PROFILE).strip().lower()
+        entry_profile = (
+            str(entry.get("product_profile") or DEFAULT_PRODUCT_PROFILE)
+            .strip()
+            .lower()
+        )
         if selected_profile and entry_profile != selected_profile:
+            continue
+        if entry_profile == "beauty" and not passes_beauty_brand_filter(
+            entry,
+            allowed_brand_names=allowed_beauty_brand_names,
+        ).passed:
             continue
         send_after = parse_iso(entry.get("send_after_at"))
         if send_after and send_after > now_dt:

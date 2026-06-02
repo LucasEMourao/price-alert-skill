@@ -3,11 +3,49 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
 from price_alert_skill.log_time import format_brazil_log_timestamp
+
+
+def _log_brand_filter_summary(
+    deals: list[dict[str, Any]],
+    *,
+    logger: Callable[[str], None],
+) -> None:
+    beauty_deals = [
+        deal
+        for deal in deals
+        if str(deal.get("product_profile") or "").strip().lower() == "beauty"
+    ]
+    if not beauty_deals:
+        return
+
+    allowed = [
+        deal
+        for deal in beauty_deals
+        if bool(deal.get("brand_filter_passed", True))
+    ]
+    filtered = len(beauty_deals) - len(allowed)
+    logger(
+        "\nBeauty brand filter: "
+        f"{len(allowed)}/{len(beauty_deals)} allowed, {filtered} filtered"
+    )
+
+    brand_counts = Counter(
+        str(deal.get("allowed_brand") or "").strip()
+        for deal in allowed
+        if deal.get("allowed_brand")
+    )
+    if brand_counts:
+        summary = ", ".join(
+            f"{brand}: {count}"
+            for brand, count in brand_counts.most_common(8)
+        )
+        logger(f"Allowed beauty brands found: {summary}")
 
 
 def main(
@@ -91,6 +129,12 @@ def main(
     prepared_deals = [prepare_deal_for_selection_fn(deal) for deal in unique_deals]
     if collapse_prepared_deals_fn is not None:
         prepared_deals = collapse_prepared_deals_fn(prepared_deals)
+    _log_brand_filter_summary(prepared_deals, logger=logger)
+    prepared_deals = [
+        deal
+        for deal in prepared_deals
+        if bool(deal.get("brand_filter_passed", True))
+    ]
     apply_affiliate_links_fn(prepared_deals)
 
     if args.scan_only:

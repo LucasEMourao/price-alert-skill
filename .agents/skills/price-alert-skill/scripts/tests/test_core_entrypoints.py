@@ -126,3 +126,62 @@ def test_scan_cli_passes_selected_profile_to_all_queries(monkeypatch):
     assert captured["scan_only"] is True
     assert "legacy" not in captured
     assert logs[0].startswith("[2026-04-29 09:00:00] Scanning for deals (min 10.0% off)...")
+
+
+def test_scan_cli_filters_beauty_deals_before_affiliate_links(monkeypatch):
+    captured = {}
+    logs: list[str] = []
+    raw_deals = [
+        {
+            "title": "Natura Serum Facial",
+            "url": "https://example.com/natura",
+            "marketplace": "mercadolivre_br",
+        },
+        {
+            "title": "Serum Facial Generico",
+            "url": "https://example.com/generico",
+            "marketplace": "mercadolivre_br",
+        },
+    ]
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "scan_cli.py",
+            "--all",
+            "--profile",
+            "beauty",
+            "--scan-only",
+        ],
+    )
+
+    def prepare(deal):
+        is_allowed = "Natura" in deal["title"]
+        return {
+            **deal,
+            "product_profile": "beauty",
+            "brand_filter_passed": is_allowed,
+            "allowed_brand": "Natura" if is_allowed else None,
+        }
+
+    scan_cli_main(
+        configure_utf8_stdio_fn=lambda: None,
+        get_queries_fn=lambda profile, categories: ["serum facial"],
+        scan_all_fn=lambda max_results, min_discount, marketplaces, queries: raw_deals,
+        deduplicate_run_deals_fn=lambda deals: deals,
+        prepare_deal_for_selection_fn=prepare,
+        collapse_prepared_deals_fn=None,
+        apply_affiliate_links_fn=lambda deals: captured.update(
+            {"affiliate_titles": [deal["title"] for deal in deals]}
+        ),
+        handle_cadence_scan_fn=lambda parser, deals, args, now: captured.update(
+            {"cadence_titles": [deal["title"] for deal in deals]}
+        ),
+        handle_legacy_flow_fn=lambda parser, deals, args, now: captured.update({"legacy": True}),
+        logger=logs.append,
+        now_fn=lambda: datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert captured["affiliate_titles"] == ["Natura Serum Facial"]
+    assert captured["cadence_titles"] == ["Natura Serum Facial"]
+    assert any("Beauty brand filter: 1/2 allowed, 1 filtered" in line for line in logs)

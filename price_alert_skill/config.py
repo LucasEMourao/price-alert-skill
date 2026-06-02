@@ -8,6 +8,7 @@ import os
 import sys
 from pathlib import Path
 
+from .core.domain.brand_filter import parse_configured_brand_names
 from .paths import REPO_ROOT, resolve_skill_root
 from .runtime import (
     RuntimeEnvironment,
@@ -39,6 +40,7 @@ BAILEYS_GATEWAY_URL = os.environ.get("BAILEYS_GATEWAY_URL", "http://127.0.0.1:30
 PRICE_ALERT_RUNTIME = os.environ.get("PRICE_ALERT_RUNTIME", "auto")
 WHATSAPP_CHROME_PATH = os.environ.get("WHATSAPP_CHROME_PATH", "")
 WHATSAPP_PROFILE_DIR = os.environ.get("WHATSAPP_PROFILE_DIR", "")
+PRICE_ALERT_ALLOWED_BEAUTY_BRANDS = os.environ.get("PRICE_ALERT_ALLOWED_BEAUTY_BRANDS", "")
 
 # ML Affiliate login credentials (loaded from .env)
 ML_AFFILIATE_EMAIL = os.environ.get("ML_AFFILIATE_EMAIL", "")
@@ -106,6 +108,16 @@ def resolve_whatsapp_group(cli_group: str = "") -> str:
     if resolve_whatsapp_sender_backend() == "baileys":
         return resolve_whatsapp_group_jid()
     return ""
+
+
+def resolve_allowed_beauty_brand_names() -> tuple[str, ...] | None:
+    """Resolve the optional runtime override for the beauty brand allowlist."""
+    return parse_configured_brand_names(
+        os.environ.get(
+            "PRICE_ALERT_ALLOWED_BEAUTY_BRANDS",
+            PRICE_ALERT_ALLOWED_BEAUTY_BRANDS,
+        )
+    )
 
 
 def resolve_price_alert_runtime() -> RuntimeEnvironment:

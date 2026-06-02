@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -144,12 +145,14 @@ class JSONQueueRepository:
         *,
         now: datetime | str | None = None,
         product_profile: str | None = None,
+        allowed_beauty_brand_names: Iterable[str] | None = None,
     ) -> list[dict[str, Any]]:
         return get_sendable_entries(
             queue,
             lane,
             now=now,
             product_profile=product_profile,
+            allowed_beauty_brand_names=allowed_beauty_brand_names,
         )
 
     def mark_deal_failed(
