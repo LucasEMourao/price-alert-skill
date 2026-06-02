@@ -137,6 +137,7 @@ Se um novo agente assumir a conversa daqui:
 - `PRICE_ALERT_RUNTIME` - `auto`, `windows` ou `linux`; em WSL o padrao `auto` resolve como Linux
 - `WHATSAPP_CHROME_PATH` - override opcional do executavel Chrome/Chromium
 - `WHATSAPP_PROFILE_DIR` - override opcional do perfil persistente do WhatsApp Web
+- `PRICE_ALERT_ALLOWED_BEAUTY_BRANDS` - override opcional da allowlist de marcas do perfil `beauty`
 
 ## Instalacao
 

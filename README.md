@@ -69,6 +69,7 @@ Useful environment variables:
 - `PRICE_ALERT_SCAN_CATEGORIES`
 - `PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE`
 - `PRICE_ALERT_SEND_PROFILE`
+- `PRICE_ALERT_ALLOWED_BEAUTY_BRANDS`: optional comma- or semicolon-separated override for the beauty brand allowlist; leave empty to use the versioned full list.
 - `WHATSAPP_GROUP`
 - `PRICE_ALERT_IMAGEMAGICK_BIN`: optional path to the ImageMagick `magick` or `convert` binary used to normalize Baileys image sends.
 
@@ -81,6 +82,8 @@ PRICE_ALERT_WRITE_IMAGE_STUBS=1 python -m pytest tests/test_baileys_image_stub.p
 The generated images and manifest are written to `.pytest-tmp/whatsapp-image-stub/`.
 
 When `PRICE_ALERT_SCAN_PROFILE=beauty` and `PRICE_ALERT_SCAN_CATEGORIES` is empty, `run_scan.sh` rotates two categories per run by default. Set `PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE` to override the batch size, or set `PRICE_ALERT_SCAN_CATEGORIES` to pin a fixed subset.
+
+The `beauty` profile also applies a versioned brand allowlist before affiliate-link generation and queue insertion. Matching is accent-insensitive and alias-based, so marketplace titles such as `loreal paris`, `boticario`, or `la roche posay` can match the canonical brands. Set `PRICE_ALERT_ALLOWED_BEAUTY_BRANDS` only when you need a temporary pilot subset.
 
 ## Flow diagnostic
 

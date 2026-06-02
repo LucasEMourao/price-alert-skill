@@ -28,6 +28,7 @@ The current scan load guardrails are:
 - otherwise `beauty` rotates two categories per run by default
 - other profiles stay full-profile unless `PRICE_ALERT_SCAN_CATEGORY_BATCH_SIZE` is set
 - overlapping scan triggers are ignored while an earlier scan is still running
+- `beauty` deals are filtered by the versioned brand allowlist before affiliate links and queue insertion
 
 ## Linux/WSL wrappers
 
@@ -204,6 +205,7 @@ When the flow appears stuck:
 5. Verify the Ubuntu instance uptime and `systemctl status cron`.
 6. Run `./diag_flow.sh` for RAM/CPU/GPU/process snapshots.
 7. Confirm the reported scan profile, categories and batch mode match the intended pilot settings.
+8. For beauty pilots, check the scan log line `Beauty brand filter` to compare allowed vs filtered volume.
 
 ## Baileys migration operating plan
 
