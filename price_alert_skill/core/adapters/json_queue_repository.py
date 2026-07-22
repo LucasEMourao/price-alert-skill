@@ -146,6 +146,7 @@ class JSONQueueRepository:
         now: datetime | str | None = None,
         product_profile: str | None = None,
         allowed_beauty_brand_names: Iterable[str] | None = None,
+        allowed_marketplaces: Iterable[str] | None = None,
     ) -> list[dict[str, Any]]:
         return get_sendable_entries(
             queue,
@@ -153,6 +154,7 @@ class JSONQueueRepository:
             now=now,
             product_profile=product_profile,
             allowed_beauty_brand_names=allowed_beauty_brand_names,
+            allowed_marketplaces=allowed_marketplaces,
         )
 
     def mark_deal_failed(

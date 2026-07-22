@@ -11,6 +11,8 @@ from typing import Any
 from price_alert_skill.config import (
     configure_utf8_stdio,
     resolve_allowed_beauty_brand_names,
+    resolve_price_alert_marketplaces,
+    resolve_shopee_settings,
     resolve_whatsapp_group,
 )
 from price_alert_skill.core.adapters.amazon_scanner import AmazonMarketplaceScanner
@@ -18,6 +20,7 @@ from price_alert_skill.core.adapters.meli_affiliate_links import MeliAffiliateLi
 from price_alert_skill.core.adapters.mercadolivre_scanner import (
     MercadoLivreMarketplaceScanner,
 )
+from price_alert_skill.core.adapters.shopee_scanner import ShopeeMarketplaceScanner
 from price_alert_skill.core.adapters.whatsapp_sender import WhatsAppBatchSender
 from price_alert_skill.core.entrypoints.scan_cli import main as run_scan_cli
 from price_alert_skill.core.application.scan_use_case import (
@@ -58,10 +61,27 @@ from price_alert_skill.utils import (
 MESSAGES_DIR = resolve_data_dir() / "messages"
 _AMAZON_SCANNER = AmazonMarketplaceScanner()
 _MERCADOLIVRE_SCANNER = MercadoLivreMarketplaceScanner()
+_SHOPEE_SCANNER = ShopeeMarketplaceScanner()
 _AFFILIATE_LINK_GENERATOR = MeliAffiliateLinkGenerator()
 _WHATSAPP_BATCH_SENDER = WhatsAppBatchSender()
 run_amazon = _AMAZON_SCANNER
 run_mercadolivre_browser = _MERCADOLIVRE_SCANNER
+
+
+def run_shopee(*, query: str, max_results: int) -> dict[str, Any]:
+    """Run Shopee only when its hard opt-in gate is enabled."""
+    if not resolve_shopee_settings().enabled:
+        return {
+            "marketplace": "shopee_br",
+            "query": query,
+            "products": [],
+            "pages": [],
+            "errors": [{
+                "kind": "configuration",
+                "message": "Shopee is disabled by SHOPEE_ENABLED",
+            }],
+        }
+    return _SHOPEE_SCANNER(query=query, max_results=max_results)
 
 
 def extract_deals_from_products(
@@ -94,7 +114,9 @@ def scan_marketplace(
         min_discount,
         amazon_runner=run_amazon,
         mercadolivre_runner=run_mercadolivre_browser,
+        shopee_runner=run_shopee,
         calculate_discount_fn=calculate_discount,
+        logger=print,
     )
 
 
@@ -274,6 +296,7 @@ def main() -> None:
         handle_legacy_flow_fn=handle_legacy_flow,
         logger=print,
         now_fn=lambda: datetime.now(timezone.utc),
+        marketplaces_default_fn=resolve_price_alert_marketplaces,
     )
 
 

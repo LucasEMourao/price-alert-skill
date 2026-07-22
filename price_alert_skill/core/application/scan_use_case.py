@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from price_alert_skill.core.domain.identity import build_product_key
 from price_alert_skill.core.domain.lane_rules import (
     SHOPEE_DISCOUNT_SOURCE,
     get_authoritative_discount_pct,
@@ -32,7 +33,7 @@ def _extract_shopee_deal(
         current_price = product.get("price")
     title = product.get("title", "")
     outbound_url = product.get("url") or product.get("offer_link")
-    product_url = product.get("product_url") or product.get("product_link") or outbound_url
+    product_url = product.get("product_url") or product.get("product_link")
     discount_pct = get_authoritative_discount_pct(product)
 
     try:
@@ -58,7 +59,9 @@ def _extract_shopee_deal(
     return {
         "title": title,
         "url": outbound_url,
+        "affiliate_url": outbound_url,
         "product_url": product_url,
+        "source_product_key": build_product_key(str(product_url)),
         "dedup_key": product_url,
         "image_url": product.get("image_url"),
         "marketplace": SHOPEE_MARKETPLACE,
@@ -166,24 +169,59 @@ def scan_marketplace(
     *,
     amazon_runner: Callable[..., dict[str, Any]],
     mercadolivre_runner: Callable[..., dict[str, Any]],
+    shopee_runner: Callable[..., dict[str, Any]] | None = None,
     calculate_discount_fn: Callable[[float, float], float | None],
+    logger: Callable[[str], None] | None = None,
 ) -> list[dict[str, Any]]:
-    """Scan a single marketplace for deals."""
+    """Scan one configured marketplace and normalize its qualifying deals.
+
+    Provider failures are intentionally left to ``scan_all`` to isolate.  A
+    Shopee runner may return a structured provider result with errors while
+    still returning usable products; those diagnostics are summarized without
+    leaking provider credentials or signed request data.
+    """
     if marketplace == "amazon_br":
-        result = amazon_runner(query=query, max_results=max_results)
+        runner = amazon_runner
     elif marketplace == "mercadolivre_br":
-        result = mercadolivre_runner(query=query, max_results=max_results)
+        runner = mercadolivre_runner
+    elif marketplace == SHOPEE_MARKETPLACE:
+        if shopee_runner is None:
+            return []
+        runner = shopee_runner
     else:
         return []
 
+    result = runner(query=query, max_results=max_results)
+    if not isinstance(result, dict):
+        raise TypeError(f"{marketplace} runner returned a non-object result")
+
     products = result.get("products", [])
-    return extract_deals_from_products(
+    if not isinstance(products, list):
+        raise TypeError(f"{marketplace} runner returned an invalid products list")
+
+    deals = extract_deals_from_products(
         products,
         marketplace,
         query,
         min_discount,
         calculate_discount_fn=calculate_discount_fn,
     )
+
+    if marketplace == SHOPEE_MARKETPLACE and logger is not None:
+        pages = result.get("pages")
+        page_count = len(pages) if isinstance(pages, list) else 0
+        request_count = result.get("requests", page_count)
+        if not isinstance(request_count, int):
+            request_count = page_count
+        errors = result.get("errors")
+        error_count = len(errors) if isinstance(errors, list) else 0
+        logger(
+            "  Shopee summary: "
+            f"requests={request_count}, pages={page_count}, "
+            f"products={len(products)}, deals={len(deals)}, errors={error_count}"
+        )
+
+    return deals
 
 
 def scan_all(
@@ -215,8 +253,11 @@ def deduplicate_run_deals(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     unique_deals = []
     for deal in deals:
         product_url = deal.get("product_url") or deal.get("url")
+        canonical_product_key = build_product_key(str(product_url or ""))
         if is_shopee_source_aware(deal):
-            dedup_key = (product_url, deal.get("current_price"))
+            # Affiliate links can vary per request.  Only the canonical
+            # product identity and current price define a scan-run offer.
+            dedup_key = (canonical_product_key, deal.get("current_price"))
         else:
             dedup_key = product_url
         if dedup_key not in seen_keys:

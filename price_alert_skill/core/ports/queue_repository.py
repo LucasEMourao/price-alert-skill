@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -53,8 +54,11 @@ class QueueRepository(Protocol):
         lane: str,
         *,
         now: datetime | str | None = None,
+        product_profile: str | None = None,
+        allowed_beauty_brand_names: Iterable[str] | None = None,
+        allowed_marketplaces: Iterable[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Return entries whose backoff has elapsed."""
+        """Return entries that pass sender profile and marketplace filters."""
 
     def mark_deal_failed(
         self,

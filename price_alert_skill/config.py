@@ -56,6 +56,19 @@ def _parse_positive_int(value: str, *, default: int) -> int:
     return parsed if parsed > 0 else default
 
 
+def _parse_marketplace_list(value: str | None) -> tuple[str, ...]:
+    """Parse a comma-separated marketplace list in stable order."""
+    if value is None:
+        return ()
+
+    marketplaces: list[str] = []
+    for raw_marketplace in value.split(","):
+        marketplace = raw_marketplace.strip().lower()
+        if marketplace and marketplace not in marketplaces:
+            marketplaces.append(marketplace)
+    return tuple(marketplaces)
+
+
 @dataclass(frozen=True)
 class ShopeeSettings:
     """Opt-in Shopee transport settings.
@@ -111,6 +124,34 @@ PRICE_ALERT_SEND_MARKETPLACES = os.environ.get(
     "PRICE_ALERT_SEND_MARKETPLACES",
     "",
 ).strip()
+
+
+def resolve_price_alert_marketplaces() -> tuple[str, ...]:
+    """Resolve the scanner allowlist, preserving the legacy default.
+
+    ``PRICE_ALERT_MARKETPLACES`` controls which providers are scanned.  Shopee
+    has an additional hard gate: it is ignored by the Shopee client unless
+    ``SHOPEE_ENABLED=1``.  Removing ``shopee_br`` from this list is therefore
+    the scan rollback switch and does not touch persisted queue state.
+    """
+    configured = os.environ.get("PRICE_ALERT_MARKETPLACES", PRICE_ALERT_MARKETPLACES)
+    return _parse_marketplace_list(configured)
+
+
+def resolve_price_alert_send_marketplaces() -> tuple[str, ...] | None:
+    """Resolve the optional sender allowlist.
+
+    An empty ``PRICE_ALERT_SEND_MARKETPLACES`` means no additional sender
+    filter, which preserves delivery of existing marketplace entries.  A
+    non-empty list can be used as an independent rollback control for queued
+    Shopee deals.
+    """
+    configured = os.environ.get(
+        "PRICE_ALERT_SEND_MARKETPLACES",
+        PRICE_ALERT_SEND_MARKETPLACES,
+    )
+    marketplaces = _parse_marketplace_list(configured)
+    return marketplaces or None
 
 
 AMAZON_AFFILIATE_TAG = os.environ.get("AMAZON_AFFILIATE_TAG", "brunoentende-20")

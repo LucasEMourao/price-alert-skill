@@ -12,6 +12,7 @@ from typing import Any
 from price_alert_skill.config import (
     configure_utf8_stdio,
     resolve_allowed_beauty_brand_names,
+    resolve_price_alert_send_marketplaces,
     resolve_whatsapp_send_interval_seconds,
     resolve_whatsapp_group,
     resolve_whatsapp_sender_backend,
@@ -186,6 +187,7 @@ def _get_sendable_entries_for_sender(
         now=now,
         product_profile=product_profile,
         allowed_beauty_brand_names=resolve_allowed_beauty_brand_names(),
+        allowed_marketplaces=resolve_price_alert_send_marketplaces(),
     )
 
 

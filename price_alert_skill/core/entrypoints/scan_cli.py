@@ -61,6 +61,7 @@ def main(
     handle_legacy_flow_fn: Callable[[argparse.ArgumentParser, list[dict[str, Any]], argparse.Namespace, datetime], None],
     logger: Callable[[str], None] = print,
     now_fn: Callable[[], datetime] | None = None,
+    marketplaces_default_fn: Callable[[], tuple[str, ...]] | None = None,
 ) -> None:
     """Parse CLI args and orchestrate the scan flow through injected dependencies."""
     configure_utf8_stdio_fn()
@@ -86,7 +87,11 @@ def main(
     )
     parser.add_argument("--max-results", type=int, default=15, help="Max results per marketplace/query")
     parser.add_argument("--min-discount", type=float, default=10.0, help="Minimum discount %% to include")
-    parser.add_argument("--marketplaces", default="amazon_br,mercadolivre_br", help="Comma-separated marketplaces")
+    parser.add_argument(
+        "--marketplaces",
+        default=None,
+        help="Comma-separated marketplaces (defaults to PRICE_ALERT_MARKETPLACES)",
+    )
     parser.add_argument("--output", help="Path to save messages JSON")
     parser.add_argument("--send-whatsapp", action="store_true", help="Send deals to WhatsApp after scanning")
     parser.add_argument(
@@ -109,7 +114,26 @@ def main(
     if not args.query and not args.all:
         parser.error("Provide a query or use --all")
 
-    marketplaces = [m.strip() for m in args.marketplaces.split(",")]
+    configured_marketplaces = (
+        marketplaces_default_fn()
+        if args.marketplaces is None and marketplaces_default_fn is not None
+        else args.marketplaces
+        if args.marketplaces is not None
+        else os.environ.get("PRICE_ALERT_MARKETPLACES", "amazon_br,mercadolivre_br")
+    )
+    if isinstance(configured_marketplaces, str):
+        marketplaces = [
+            marketplace.strip().lower()
+            for marketplace in configured_marketplaces.split(",")
+            if marketplace.strip()
+        ]
+    else:
+        marketplaces = [
+            str(marketplace).strip().lower()
+            for marketplace in configured_marketplaces
+            if str(marketplace).strip()
+        ]
+
     try:
         queries = get_queries_fn(args.profile, args.query_categories) if args.all else [args.query]
     except ValueError as exc:
