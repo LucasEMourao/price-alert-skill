@@ -1,0 +1,37 @@
+{
+  "data": {
+    "productOfferV2": {
+      "nodes": [
+        {
+          "itemId": 900000000008,
+          "commissionRate": "0.0600",
+          "sellerCommissionRate": "0.0300",
+          "shopeeCommissionRate": "0.0300",
+          "commission": "4.794",
+          "price": "79.90",
+          "sales": 7,
+          "priceMax": "99.90",
+          "priceMin": "79.90",
+          "productCatIds": [100006, 100060, 100160],
+          "ratingStar": "4.1",
+          "priceDiscountRate": 20,
+          "imageUrl": "https://cf.shopee.com.br/file/redacted-image-008",
+          "productName": "Produto com Loja sem Tipo Exemplo",
+          "shopId": 800000008,
+          "shopName": "Vendedor sem Classificação",
+          "shopType": [],
+          "productLink": "https://shopee.com.br/product/800000008/900000000008",
+          "offerLink": "https://shope.ee/redacted-offer-008",
+          "periodStartTime": 1700000000,
+          "periodEndTime": 32503651199
+        }
+      ],
+      "pageInfo": {
+        "page": 1,
+        "limit": 2,
+        "hasNextPage": false,
+        "scrollId": null
+      }
+    }
+  }
+}

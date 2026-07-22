@@ -1,0 +1,60 @@
+{
+  "data": {
+    "productOfferV2": {
+      "nodes": [
+        {
+          "itemId": 900000000001,
+          "commissionRate": "0.1200",
+          "sellerCommissionRate": "0.0800",
+          "shopeeCommissionRate": "0.0400",
+          "commission": "14.388",
+          "price": "119.90",
+          "sales": 128,
+          "priceMax": "149.90",
+          "priceMin": "119.90",
+          "productCatIds": [100001, 100010, 0],
+          "ratingStar": "4.8",
+          "priceDiscountRate": 20,
+          "imageUrl": "https://cf.shopee.com.br/file/redacted-image-001",
+          "productName": "Fone de Ouvido Bluetooth Exemplo",
+          "shopId": 800000001,
+          "shopName": "Loja Exemplo Oficial",
+          "shopType": [1],
+          "productLink": "https://shopee.com.br/product/800000001/900000000001",
+          "offerLink": "https://shope.ee/redacted-offer-001",
+          "periodStartTime": 1700000000,
+          "periodEndTime": 32503651199
+        },
+        {
+          "itemId": 900000000002,
+          "commissionRate": "0.1000",
+          "sellerCommissionRate": "0.0600",
+          "shopeeCommissionRate": "0.0400",
+          "commission": "7.990",
+          "price": "79.90",
+          "sales": 64,
+          "priceMax": "99.90",
+          "priceMin": "79.90",
+          "productCatIds": [100001, 100011, 100111],
+          "ratingStar": "4.5",
+          "priceDiscountRate": 20,
+          "imageUrl": "https://cf.shopee.com.br/file/redacted-image-002",
+          "productName": "Suporte de Mesa Exemplo",
+          "shopId": 800000002,
+          "shopName": "Casa Exemplo",
+          "shopType": [2, 4],
+          "productLink": "https://shopee.com.br/product/800000002/900000000002",
+          "offerLink": "https://shope.ee/redacted-offer-002",
+          "periodStartTime": 1700000000,
+          "periodEndTime": 32503651199
+        }
+      ],
+      "pageInfo": {
+        "page": 1,
+        "limit": 2,
+        "hasNextPage": true,
+        "scrollId": null
+      }
+    }
+  }
+}

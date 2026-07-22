@@ -1,0 +1,60 @@
+{
+  "data": {
+    "productOfferV2": {
+      "nodes": [
+        {
+          "itemId": 900000000003,
+          "commissionRate": "0.1500",
+          "sellerCommissionRate": "0.1000",
+          "shopeeCommissionRate": "0.0500",
+          "commission": "18.735",
+          "price": "124.90",
+          "sales": 91,
+          "priceMax": "159.90",
+          "priceMin": "124.90",
+          "productCatIds": [100002, 100020, 0],
+          "ratingStar": "4.9",
+          "priceDiscountRate": 22,
+          "imageUrl": "https://cf.shopee.com.br/file/redacted-image-003",
+          "productName": "Teclado Mecânico Exemplo",
+          "shopId": 800000003,
+          "shopName": "Setup Exemplo",
+          "shopType": [1, 4],
+          "productLink": "https://shopee.com.br/product/800000003/900000000003",
+          "offerLink": "https://shope.ee/redacted-offer-003",
+          "periodStartTime": 1700000000,
+          "periodEndTime": 32503651199
+        },
+        {
+          "itemId": 900000000004,
+          "commissionRate": "0.0900",
+          "sellerCommissionRate": "0.0500",
+          "shopeeCommissionRate": "0.0400",
+          "commission": "10.791",
+          "price": "119.90",
+          "sales": 37,
+          "priceMax": "149.90",
+          "priceMin": "119.90",
+          "productCatIds": [100002, 100021, 100121],
+          "ratingStar": "4.2",
+          "priceDiscountRate": 20,
+          "imageUrl": "https://cf.shopee.com.br/file/redacted-image-004",
+          "productName": "Mouse Gamer Exemplo",
+          "shopId": 800000004,
+          "shopName": "Games Exemplo",
+          "shopType": [2],
+          "productLink": "https://shopee.com.br/product/800000004/900000000004",
+          "offerLink": "https://shope.ee/redacted-offer-004",
+          "periodStartTime": 1700000000,
+          "periodEndTime": 32503651199
+        }
+      ],
+      "pageInfo": {
+        "page": 2,
+        "limit": 2,
+        "hasNextPage": true,
+        "scrollId": null
+      }
+    }
+  }
+}
