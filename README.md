@@ -85,6 +85,93 @@ When `PRICE_ALERT_SCAN_PROFILE=beauty` and `PRICE_ALERT_SCAN_CATEGORIES` is empt
 
 The `beauty` profile also applies a versioned brand allowlist before affiliate-link generation and queue insertion. Matching is accent-insensitive and alias-based, so marketplace titles such as `loreal paris`, `boticario`, or `la roche posay` can match the canonical brands. Set `PRICE_ALERT_ALLOWED_BEAUTY_BRANDS` only when you need a temporary pilot subset.
 
+## Shopee Affiliate Open API (controlled rollout)
+
+Shopee V2 is an opt-in provider. The initial integration uses only the official
+`productOfferV2` operation and keeps `productLink` (canonical identity) separate
+from `offerLink` (affiliate outbound URL). It does not use feed ingestion or
+short-link generation.
+
+Enable it only in a controlled environment with dedicated non-production
+credentials:
+
+```env
+SHOPEE_ENABLED=1
+SHOPEE_APP_ID=<non-production-app-id>
+SHOPEE_APP_SECRET=<non-production-app-secret>
+PRICE_ALERT_MARKETPLACES=shopee_br
+SHOPEE_MAX_PAGES_PER_QUERY=1
+```
+
+Configuration precedence is deliberate:
+
+1. `SHOPEE_ENABLED=0` is the hard provider-off switch and takes precedence over
+   every marketplace list.
+2. `PRICE_ALERT_MARKETPLACES` controls which providers are scanned; it must
+   contain `shopee_br` for Shopee to run.
+3. `PRICE_ALERT_SEND_MARKETPLACES`, when non-empty, is an independent sender
+   allowlist. An empty value preserves the existing behavior for queued deals.
+
+The normal legacy default remains `amazon_br,mercadolivre_br`. Credentials are
+read only while Shopee is enabled and must exist only in the server `.env`; do
+not place them in fixtures, queue files, message JSON, or logs.
+
+### Shopee observability
+
+A Shopee scan emits a structured summary in the scan log:
+
+```text
+Shopee summary: requests=1, pages=1, products=1, deals=0, errors=0
+```
+
+The counters mean:
+
+- `requests`: provider requests reported by the scanner; when absent, one
+  request is counted per recorded page;
+- `pages`: pages received and recorded from `pageInfo`;
+- `products`: normalized products returned by the provider adapter;
+- `deals`: products that passed the source-aware percentage and lane rules;
+- `errors`: structured provider/normalization errors returned by the adapter.
+
+Shopee API and GraphQL failures are redacted before they reach operational
+logs. Authorization values, signatures, App Secrets, and credential-shaped
+values must never be printed or persisted. HTTP 200 responses containing a
+GraphQL `errors` array are failures, not successful provider results.
+
+### Controlled canary procedure
+
+Repository tests and deployment validation use mocked responses and never call
+Shopee. A live canary requires explicit approval, a dedicated non-production
+credential, and one bounded page:
+
+```bash
+cd .agents/skills/price-alert-skill
+SHOPEE_ENABLED=1 SHOPEE_MAX_PAGES_PER_QUERY=1 \\
+python3 scripts/scan_deals.py \\
+  "monitor gamer" --marketplaces shopee_br --max-results 1 \\
+  --min-discount 999 --scan-only
+```
+
+This connectivity check should not qualify a deal. Before any qualifying test,
+inspect the normalized product, `data/deal_queue.json`, `data/messages/`, the
+canonical product identity, discount source, and affiliate URL. Do not pass
+`--send-whatsapp` during the canary. A real send is a separate, manually
+approved step after queue validation.
+
+### Shopee rollback
+
+To stop new Shopee scans without editing persisted queue state, remove
+`shopee_br` from `PRICE_ALERT_MARKETPLACES` and set `SHOPEE_ENABLED=0`, then
+restart the scan/sender supervisors. To prevent already queued Shopee entries
+from being sent, temporarily set:
+
+```env
+PRICE_ALERT_SEND_MARKETPLACES=amazon_br,mercadolivre_br
+```
+
+Restore an empty sender allowlist only after the Shopee canary and logs are
+healthy. Keep the rollback configuration available for the whole pilot window.
+
 ## Flow diagnostic
 
 Use this when you want to share current resource usage with someone who is choosing a server:

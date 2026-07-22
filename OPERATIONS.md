@@ -59,6 +59,109 @@ Examples:
 
 Python log formatting is centralized in `price_alert_skill/log_time.py`.
 
+## Shopee V2 operational runbook
+
+Shopee is an opt-in scan provider. The first release uses only the official
+`productOfferV2` endpoint. It does not ingest feeds, generate short links, or
+change the WhatsApp gateway.
+
+### Configuration gates
+
+Use a dedicated non-production Shopee App ID and App Secret in the server-only
+`.agents/skills/price-alert-skill/.env`. Never copy credentials into a fixture,
+queue entry, message JSON, or log.
+
+The gates are evaluated in this order:
+
+1. `SHOPEE_ENABLED=0` disables the provider and prevents its credentials from
+   being loaded.
+2. `PRICE_ALERT_MARKETPLACES` must include `shopee_br` to activate Shopee in a
+   scan. The legacy default remains `amazon_br,mercadolivre_br`.
+3. A non-empty `PRICE_ALERT_SEND_MARKETPLACES` filters queued sends by
+   marketplace. Empty means no additional sender filter.
+
+This gives scan rollback and queued-send rollback independent controls. Neither
+control requires editing `data/deal_queue.json`.
+
+### Counters and redacted errors
+
+For each Shopee marketplace/query scan, inspect the summary in the scan log:
+
+```text
+Shopee summary: requests=1, pages=1, products=1, deals=0, errors=0
+```
+
+Interpret the counters as follows:
+
+- `requests`: requests reported by the provider result; the current fallback
+  counts one request for each recorded page when the result has no explicit
+  request count;
+- `pages`: received `pageInfo` records, including requested and response page
+  numbers;
+- `products`: normalized, active products returned by the Shopee adapter;
+- `deals`: products that pass the API percentage threshold and existing lane
+  selection;
+- `errors`: structured transport, GraphQL, response, pagination, or
+  normalization errors.
+
+`productLink` is the canonical identity URL. `offerLink` is the outbound
+affiliate URL. Check both when diagnosing a queue entry. A `priceMax` value is
+metadata only and must never appear as a fabricated previous price.
+
+Shopee API errors are redacted before logging. In particular, logs must not
+contain an Authorization header, signature, App Secret, or raw signed payload.
+A GraphQL `errors` array is an error even when HTTP status is 200. If a log
+contains credential-shaped material, stop the rollout, preserve the redacted
+log for incident review only, rotate the affected credential, and do not send
+it to tickets or chat.
+
+### Controlled canary
+
+The local validation path is fixture-only. Do not make a live API call without
+explicit approval. When approval exists, use one bounded page and a dedicated
+non-production credential:
+
+```bash
+cd .agents/skills/price-alert-skill
+SHOPEE_ENABLED=1 SHOPEE_MAX_PAGES_PER_QUERY=1 \\
+python3 scripts/scan_deals.py \\
+  "monitor gamer" --marketplaces shopee_br --max-results 1 \\
+  --min-discount 999 --scan-only
+```
+
+The high discount is a connectivity check and should normally queue nothing.
+Inspect the scan summary, normalized output, queue identity/current price/
+discount source/outbound URL, and `data/messages/` before running a qualifying
+bounded scan. Keep the sender stopped or filtered during validation. Sending a
+validated deal is a separate approved action; never use `--send-whatsapp` as
+part of the connectivity check.
+
+### Shopee rollback procedure
+
+1. Stop new discovery by setting `SHOPEE_ENABLED=0` and removing `shopee_br`
+   from `PRICE_ALERT_MARKETPLACES`.
+2. Restart the scan/sender supervisors or the affected `systemd` services.
+3. If queued Shopee offers must remain pending, set
+   `PRICE_ALERT_SEND_MARKETPLACES=amazon_br,mercadolivre_br`.
+4. Do not delete or hand-edit `data/deal_queue.json` or `data/sent_deals.json`.
+5. Confirm logs show no new Shopee requests and that Amazon/Mercado Livre
+   scans continue.
+6. Restore an empty sender allowlist only after the cause is understood and a
+   fresh bounded canary is approved.
+
+Rollback commands for the Linux supervisor are:
+
+```bash
+cd .agents/skills/price-alert-skill
+./stop_sender.sh
+# update the server-only .env using the settings above
+./ensure_sender.sh
+```
+
+The same environment changes apply to Windows scheduled tasks; restart the
+sender worker after updating `.env`. Rollback does not require any WhatsApp
+gateway change.
+
 ## Cron shape
 
 The current Ubuntu crontab pattern is:
