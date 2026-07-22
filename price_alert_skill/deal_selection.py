@@ -23,8 +23,10 @@ from price_alert_skill.core.domain.lane_rules import (
     DEFAULT_CATEGORY,
     LANE_PRIORITY,
     classify_deal_lane,
+    get_authoritative_discount_pct,
     get_category_rule,
     get_lane_rank,
+    is_shopee_source_aware,
     passes_quality_filters,
     qualifies_normal,
     qualifies_priority,
@@ -387,9 +389,21 @@ def prepare_deal_for_selection(
         prepared["product_key"],
         current_price,
     )
-    prepared["savings_brl"] = prepared.get("savings_brl")
-    if prepared["savings_brl"] is None:
-        prepared["savings_brl"] = calculate_savings_brl(current_price, previous_price)
+
+    if is_shopee_source_aware(prepared):
+        # Shopee's percentage is authoritative.  Its API does not document a
+        # list price, so keep both previous price and absolute savings unknown.
+        prepared["discount_pct"] = get_authoritative_discount_pct(prepared)
+        prepared["previous_price"] = None
+        prepared["previous_price_text"] = None
+        prepared["savings_brl"] = None
+        # A changed current price is a distinct Shopee offer, while the
+        # canonical product identity remains stable for cooldown decisions.
+        prepared["dedup_key"] = prepared["offer_key"]
+    else:
+        prepared["savings_brl"] = prepared.get("savings_brl")
+        if prepared["savings_brl"] is None:
+            prepared["savings_brl"] = calculate_savings_brl(current_price, previous_price)
 
     brand_match = passes_beauty_brand_filter(
         prepared,

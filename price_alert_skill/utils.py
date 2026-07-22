@@ -23,6 +23,10 @@ from price_alert_skill.core.domain.dedup_policy import (
     normalize_sent_deals_data as domain_normalize_sent_deals_data,
     normalize_sent_record as domain_normalize_sent_record,
 )
+from price_alert_skill.core.domain.lane_rules import (
+    get_authoritative_discount_pct,
+    is_shopee_source_aware,
+)
 from price_alert_skill.deal_selection import CADENCE_CONFIG
 from price_alert_skill.paths import resolve_data_dir
 
@@ -170,7 +174,14 @@ def format_deal_message(deal: dict[str, Any]) -> str:
         f"{category_emoji} {title}",
     ]
 
-    if previous_price and discount_pct:
+    if is_shopee_source_aware(deal):
+        # Shopee's API supplies the percentage but no trustworthy old price.
+        authoritative_discount = get_authoritative_discount_pct(deal)
+        lines.append("")
+        if authoritative_discount is not None:
+            lines.append(f"🔥 {int(round(authoritative_discount))}% OFF")
+        lines.append(f"🎯 Hoje: {price_today}")
+    elif previous_price and discount_pct:
         price_was = format_price_brl(previous_price)
         discount_int = int(round(discount_pct))
         lines.extend([

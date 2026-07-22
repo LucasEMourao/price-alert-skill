@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import unicodedata
 from typing import Any
 
@@ -13,6 +14,17 @@ LANE_PRIORITY = {
     "normal": 1,
     "priority": 2,
     "urgent": 3,
+}
+
+# Shopee exposes an authoritative percentage but no documented list price.
+# These thresholds intentionally use only that percentage; savings are never
+# inferred or treated as zero to make a Shopee deal qualify.
+SHOPEE_MARKETPLACE = "shopee_br"
+SHOPEE_DISCOUNT_SOURCE = "shopee_price_discount_rate"
+SHOPEE_LANE_THRESHOLDS = {
+    "normal": 10.0,
+    "priority": 25.0,
+    "urgent": 40.0,
 }
 
 
@@ -207,6 +219,39 @@ def get_lane_rank(lane: str) -> int:
     return LANE_PRIORITY.get(lane, 0)
 
 
+def is_shopee_source_aware(
+    deal: dict[str, Any],
+    *,
+    marketplace: str | None = None,
+) -> bool:
+    """Return whether a deal carries Shopee's percentage-only discount source."""
+    resolved_marketplace = marketplace if marketplace is not None else deal.get("marketplace")
+    sources = (deal.get("discount_source"), deal.get("price_discount_source"))
+    return (
+        str(resolved_marketplace or "").strip().lower() == SHOPEE_MARKETPLACE
+        and SHOPEE_DISCOUNT_SOURCE in sources
+    )
+
+
+def get_authoritative_discount_pct(deal: dict[str, Any]) -> float | None:
+    """Read the provider-authoritative percentage without deriving it from prices."""
+    # ``discount_pct`` is the normalized field.  The explicit raw-name field
+    # wins whenever present so a conflicting derived value cannot override the
+    # API's priceDiscountRate.
+    raw_value = (
+        deal.get("price_discount_rate")
+        if "price_discount_rate" in deal
+        else deal.get("discount_pct")
+    )
+    if raw_value is None or isinstance(raw_value, bool):
+        return None
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
 def passes_quality_filters(deal: dict[str, Any]) -> bool:
     """Apply extra quality gates for expensive/noisy categories."""
     category = deal.get("category", "")
@@ -245,6 +290,17 @@ def _meets_normal_threshold(deal: dict[str, Any], rule: dict[str, Any]) -> bool:
     )
 
 
+def _meets_shopee_threshold(deal: dict[str, Any], lane: str) -> bool:
+    """Apply the explicit percentage-only threshold for a Shopee lane."""
+    discount_pct = get_authoritative_discount_pct(deal)
+    threshold = SHOPEE_LANE_THRESHOLDS.get(lane)
+    return (
+        discount_pct is not None
+        and threshold is not None
+        and discount_pct >= threshold
+    )
+
+
 def _meets_either_threshold(
     deal: dict[str, Any],
     threshold: dict[str, Any] | None,
@@ -260,12 +316,22 @@ def _meets_either_threshold(
 def qualifies_normal(deal: dict[str, Any], rule: dict[str, Any] | None = None) -> bool:
     """Return True when a deal passes the standard category thresholds."""
     rule = rule or get_category_rule(deal.get("category", DEFAULT_CATEGORY))
+    if is_shopee_source_aware(deal):
+        return bool(deal.get("quality_passed", True)) and _meets_shopee_threshold(
+            deal,
+            "normal",
+        )
     return bool(deal.get("quality_passed", True)) and _meets_normal_threshold(deal, rule)
 
 
 def qualifies_priority(deal: dict[str, Any], rule: dict[str, Any] | None = None) -> bool:
     """Return True when a deal qualifies for the priority lane."""
     rule = rule or get_category_rule(deal.get("category", DEFAULT_CATEGORY))
+    if is_shopee_source_aware(deal):
+        return bool(deal.get("quality_passed", True)) and _meets_shopee_threshold(
+            deal,
+            "priority",
+        )
     return bool(deal.get("quality_passed", True)) and _meets_either_threshold(
         deal,
         rule["priority"],
@@ -275,6 +341,11 @@ def qualifies_priority(deal: dict[str, Any], rule: dict[str, Any] | None = None)
 def qualifies_urgent(deal: dict[str, Any], rule: dict[str, Any] | None = None) -> bool:
     """Return True when a deal qualifies for the urgent lane."""
     rule = rule or get_category_rule(deal.get("category", DEFAULT_CATEGORY))
+    if is_shopee_source_aware(deal):
+        return bool(deal.get("quality_passed", True)) and _meets_shopee_threshold(
+            deal,
+            "urgent",
+        )
     return bool(deal.get("quality_passed", True)) and _meets_either_threshold(
         deal,
         rule.get("urgent"),

@@ -58,7 +58,7 @@ class Deal:
     current_price: float | None = None
     previous_price: float | None = None
     discount_pct: float = 0.0
-    savings_brl: float = 0.0
+    savings_brl: float | None = None
     product_key: str = ""
     offer_key: str = ""
     image_url: str | None = None
@@ -96,7 +96,11 @@ class Deal:
                 else None
             ),
             discount_pct=float(known.get("discount_pct") or 0.0),
-            savings_brl=float(known.get("savings_brl") or 0.0),
+            savings_brl=(
+                float(known["savings_brl"])
+                if known.get("savings_brl") is not None
+                else None
+            ),
             product_key=str(known.get("product_key") or ""),
             offer_key=str(known.get("offer_key") or ""),
             image_url=known.get("image_url"),

@@ -7,8 +7,73 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from price_alert_skill.core.domain.lane_rules import (
+    SHOPEE_DISCOUNT_SOURCE,
+    get_authoritative_discount_pct,
+    is_shopee_source_aware,
+)
+
 
 AMAZON_VERIFIED_LIST_PRICE_SOURCES = {"amazon_list_price"}
+SHOPEE_MARKETPLACE = "shopee_br"
+
+
+def _extract_shopee_deal(
+    product: dict[str, Any],
+    query: str,
+    min_discount: float,
+) -> dict[str, Any] | None:
+    """Normalize one Shopee percentage-only product into a deal."""
+    if not is_shopee_source_aware(product, marketplace=SHOPEE_MARKETPLACE):
+        return None
+
+    current_price = product.get("current_price")
+    if current_price is None:
+        current_price = product.get("price")
+    title = product.get("title", "")
+    outbound_url = product.get("url") or product.get("offer_link")
+    product_url = product.get("product_url") or product.get("product_link") or outbound_url
+    discount_pct = get_authoritative_discount_pct(product)
+
+    try:
+        current_price = float(current_price)
+    except (TypeError, ValueError):
+        return None
+    if (
+        current_price <= 0
+        or not title
+        or not outbound_url
+        or not product_url
+        or discount_pct is None
+        or discount_pct <= 0
+        or discount_pct < min_discount
+    ):
+        return None
+
+    discount_source = (
+        product.get("discount_source")
+        if product.get("discount_source") == SHOPEE_DISCOUNT_SOURCE
+        else product.get("price_discount_source")
+    )
+    return {
+        "title": title,
+        "url": outbound_url,
+        "product_url": product_url,
+        "dedup_key": product_url,
+        "image_url": product.get("image_url"),
+        "marketplace": SHOPEE_MARKETPLACE,
+        "current_price": current_price,
+        "current_price_text": product.get("price_text"),
+        "previous_price": None,
+        "previous_price_text": None,
+        "discount_pct": discount_pct,
+        "price_discount_rate": discount_pct,
+        "discount_source": discount_source,
+        "price_discount_source": discount_source,
+        "savings_brl": None,
+        "query": query,
+        "source_query": query,
+    }
 
 
 def is_discount_pair_eligible(product: dict[str, Any], marketplace: str) -> bool:
@@ -46,6 +111,14 @@ def extract_deals_from_products(
     """Extract products that have a displayed discount >= min_discount."""
     deals = []
     for product in products:
+        if marketplace == SHOPEE_MARKETPLACE:
+            shopee_deal = _extract_shopee_deal(product, query, min_discount)
+            if shopee_deal is not None:
+                deals.append(shopee_deal)
+            # A Shopee product must use the explicit priceDiscountRate path;
+            # never fall through to list-price or inferred-savings logic.
+            continue
+
         current_price = product.get("price")
         list_price = product.get("list_price")
         title = product.get("title", "")
@@ -137,13 +210,17 @@ def scan_all(
 
 
 def deduplicate_run_deals(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Deduplicate deals within the same scan run by product URL."""
-    seen_urls: set[str] = set()
+    """Deduplicate deals while preserving Shopee product/offer identity."""
+    seen_keys: set[Any] = set()
     unique_deals = []
     for deal in deals:
         product_url = deal.get("product_url") or deal.get("url")
-        if product_url not in seen_urls:
-            seen_urls.add(product_url)
+        if is_shopee_source_aware(deal):
+            dedup_key = (product_url, deal.get("current_price"))
+        else:
+            dedup_key = product_url
+        if dedup_key not in seen_keys:
+            seen_keys.add(dedup_key)
             unique_deals.append(deal)
     return unique_deals
 
