@@ -15,6 +15,11 @@ dependencies = [
   "uvicorn",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0",
+]
+
 [tool.setuptools]
 include-package-data = true
 
