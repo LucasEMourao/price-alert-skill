@@ -1,0 +1,13 @@
+{
+  "data": {
+    "productOfferV2": {
+      "nodes": [],
+      "pageInfo": {
+        "page": 1,
+        "limit": 2,
+        "hasNextPage": false,
+        "scrollId": null
+      }
+    }
+  }
+}

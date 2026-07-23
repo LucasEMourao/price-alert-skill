@@ -23,8 +23,10 @@ from price_alert_skill.core.domain.lane_rules import (
     DEFAULT_CATEGORY,
     LANE_PRIORITY,
     classify_deal_lane,
+    get_authoritative_discount_pct,
     get_category_rule,
     get_lane_rank,
+    is_shopee_source_aware,
     passes_quality_filters,
     qualifies_normal,
     qualifies_priority,
@@ -34,6 +36,10 @@ from price_alert_skill.core.domain.ranking import (
     deal_sort_key,
     is_better_deal,
     sort_deals_for_sending,
+)
+from price_alert_skill.core.domain.pricing import (
+    SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE,
+    calculate_inferred_savings,
 )
 
 
@@ -387,9 +393,29 @@ def prepare_deal_for_selection(
         prepared["product_key"],
         current_price,
     )
-    prepared["savings_brl"] = prepared.get("savings_brl")
-    if prepared["savings_brl"] is None:
-        prepared["savings_brl"] = calculate_savings_brl(current_price, previous_price)
+
+    if is_shopee_source_aware(prepared):
+        # Shopee's percentage is authoritative.  When the application has
+        # explicitly reconstructed a reference price from that percentage,
+        # preserve it with its source marker; never trust an unmarked value.
+        prepared["discount_pct"] = get_authoritative_discount_pct(prepared)
+        if prepared.get("previous_price_source") == SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE:
+            prepared["savings_brl"] = calculate_inferred_savings(
+                current_price,
+                prepared.get("previous_price"),
+            )
+        else:
+            prepared["previous_price"] = None
+            prepared["previous_price_text"] = None
+            prepared["previous_price_source"] = None
+            prepared["savings_brl"] = None
+        # A changed current price is a distinct Shopee offer, while the
+        # canonical product identity remains stable for cooldown decisions.
+        prepared["dedup_key"] = prepared["offer_key"]
+    else:
+        prepared["savings_brl"] = prepared.get("savings_brl")
+        if prepared["savings_brl"] is None:
+            prepared["savings_brl"] = calculate_savings_brl(current_price, previous_price)
 
     brand_match = passes_beauty_brand_filter(
         prepared,

@@ -7,8 +7,94 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from price_alert_skill.core.domain.identity import build_product_key
+from price_alert_skill.core.domain.lane_rules import (
+    SHOPEE_DISCOUNT_SOURCE,
+    get_authoritative_discount_pct,
+    is_shopee_source_aware,
+)
+from price_alert_skill.core.domain.pricing import (
+    SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE,
+    calculate_inferred_savings,
+    reconstruct_shopee_previous_price,
+)
+
 
 AMAZON_VERIFIED_LIST_PRICE_SOURCES = {"amazon_list_price"}
+SHOPEE_MARKETPLACE = "shopee_br"
+
+
+def _extract_shopee_deal(
+    product: dict[str, Any],
+    query: str,
+    min_discount: float,
+) -> dict[str, Any] | None:
+    """Normalize one Shopee percentage-only product into a deal."""
+    if not is_shopee_source_aware(product, marketplace=SHOPEE_MARKETPLACE):
+        return None
+
+    current_price = product.get("current_price")
+    if current_price is None:
+        current_price = product.get("price")
+    title = product.get("title", "")
+    outbound_url = product.get("url") or product.get("offer_link")
+    product_url = product.get("product_url") or product.get("product_link")
+    discount_pct = get_authoritative_discount_pct(product)
+
+    try:
+        current_price = float(current_price)
+    except (TypeError, ValueError):
+        return None
+    if (
+        current_price <= 0
+        or not title
+        or not outbound_url
+        or not product_url
+        or discount_pct is None
+        or discount_pct <= 0
+        or discount_pct < min_discount
+    ):
+        return None
+
+    discount_source = (
+        product.get("discount_source")
+        if product.get("discount_source") == SHOPEE_DISCOUNT_SOURCE
+        else product.get("price_discount_source")
+    )
+    inferred_previous_price = reconstruct_shopee_previous_price(
+        current_price,
+        discount_pct,
+    )
+    inferred_savings = calculate_inferred_savings(
+        current_price,
+        inferred_previous_price,
+    )
+    return {
+        "title": title,
+        "url": outbound_url,
+        "affiliate_url": outbound_url,
+        "product_url": product_url,
+        "source_product_key": build_product_key(str(product_url)),
+        "dedup_key": product_url,
+        "image_url": product.get("image_url"),
+        "marketplace": SHOPEE_MARKETPLACE,
+        "current_price": current_price,
+        "current_price_text": product.get("price_text"),
+        "previous_price": inferred_previous_price,
+        "previous_price_text": None,
+        "previous_price_source": (
+            SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE
+            if inferred_previous_price is not None
+            else None
+        ),
+        "discount_pct": discount_pct,
+        "price_discount_rate": discount_pct,
+        "discount_source": discount_source,
+        "price_discount_source": discount_source,
+        "savings_brl": inferred_savings,
+        "query": query,
+        "source_query": query,
+    }
 
 
 def is_discount_pair_eligible(product: dict[str, Any], marketplace: str) -> bool:
@@ -46,6 +132,14 @@ def extract_deals_from_products(
     """Extract products that have a displayed discount >= min_discount."""
     deals = []
     for product in products:
+        if marketplace == SHOPEE_MARKETPLACE:
+            shopee_deal = _extract_shopee_deal(product, query, min_discount)
+            if shopee_deal is not None:
+                deals.append(shopee_deal)
+            # A Shopee product must use the explicit priceDiscountRate path;
+            # never fall through to generic marketplace list-price logic.
+            continue
+
         current_price = product.get("price")
         list_price = product.get("list_price")
         title = product.get("title", "")
@@ -93,24 +187,59 @@ def scan_marketplace(
     *,
     amazon_runner: Callable[..., dict[str, Any]],
     mercadolivre_runner: Callable[..., dict[str, Any]],
+    shopee_runner: Callable[..., dict[str, Any]] | None = None,
     calculate_discount_fn: Callable[[float, float], float | None],
+    logger: Callable[[str], None] | None = None,
 ) -> list[dict[str, Any]]:
-    """Scan a single marketplace for deals."""
+    """Scan one configured marketplace and normalize its qualifying deals.
+
+    Provider failures are intentionally left to ``scan_all`` to isolate.  A
+    Shopee runner may return a structured provider result with errors while
+    still returning usable products; those diagnostics are summarized without
+    leaking provider credentials or signed request data.
+    """
     if marketplace == "amazon_br":
-        result = amazon_runner(query=query, max_results=max_results)
+        runner = amazon_runner
     elif marketplace == "mercadolivre_br":
-        result = mercadolivre_runner(query=query, max_results=max_results)
+        runner = mercadolivre_runner
+    elif marketplace == SHOPEE_MARKETPLACE:
+        if shopee_runner is None:
+            return []
+        runner = shopee_runner
     else:
         return []
 
+    result = runner(query=query, max_results=max_results)
+    if not isinstance(result, dict):
+        raise TypeError(f"{marketplace} runner returned a non-object result")
+
     products = result.get("products", [])
-    return extract_deals_from_products(
+    if not isinstance(products, list):
+        raise TypeError(f"{marketplace} runner returned an invalid products list")
+
+    deals = extract_deals_from_products(
         products,
         marketplace,
         query,
         min_discount,
         calculate_discount_fn=calculate_discount_fn,
     )
+
+    if marketplace == SHOPEE_MARKETPLACE and logger is not None:
+        pages = result.get("pages")
+        page_count = len(pages) if isinstance(pages, list) else 0
+        request_count = result.get("requests", page_count)
+        if not isinstance(request_count, int):
+            request_count = page_count
+        errors = result.get("errors")
+        error_count = len(errors) if isinstance(errors, list) else 0
+        logger(
+            "  Shopee summary: "
+            f"requests={request_count}, pages={page_count}, "
+            f"products={len(products)}, deals={len(deals)}, errors={error_count}"
+        )
+
+    return deals
 
 
 def scan_all(
@@ -137,13 +266,20 @@ def scan_all(
 
 
 def deduplicate_run_deals(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Deduplicate deals within the same scan run by product URL."""
-    seen_urls: set[str] = set()
+    """Deduplicate deals while preserving Shopee product/offer identity."""
+    seen_keys: set[Any] = set()
     unique_deals = []
     for deal in deals:
         product_url = deal.get("product_url") or deal.get("url")
-        if product_url not in seen_urls:
-            seen_urls.add(product_url)
+        canonical_product_key = build_product_key(str(product_url or ""))
+        if is_shopee_source_aware(deal):
+            # Affiliate links can vary per request.  Only the canonical
+            # product identity and current price define a scan-run offer.
+            dedup_key = (canonical_product_key, deal.get("current_price"))
+        else:
+            dedup_key = product_url
+        if dedup_key not in seen_keys:
+            seen_keys.add(dedup_key)
             unique_deals.append(deal)
     return unique_deals
 
@@ -198,6 +334,8 @@ def build_messages_payload(
                 "marketplace": deal["marketplace"],
                 "current_price": deal["current_price"],
                 "discount_pct": deal["discount_pct"],
+                "previous_price": deal.get("previous_price"),
+                "previous_price_source": deal.get("previous_price_source"),
                 "url": deal["url"],
                 "image_url": deal.get("image_url"),
                 "message": message,

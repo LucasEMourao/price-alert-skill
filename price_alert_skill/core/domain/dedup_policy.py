@@ -5,6 +5,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
+from .lane_rules import (
+    get_authoritative_discount_pct,
+    is_shopee_source_aware,
+)
+
 
 def deal_dedup_key(deal: dict[str, Any]) -> str:
     """Resolve the stable deduplication key for a deal."""
@@ -175,16 +180,21 @@ def can_send_again(
     if deal.get("lane") == "urgent" or deal.get("is_super_promo"):
         return True
 
-    current_discount = float(deal.get("discount_pct") or 0.0)
-    current_savings = float(deal.get("savings_brl") or 0.0)
+    current_discount = get_authoritative_discount_pct(deal) or 0.0
     previous_discount = float(latest_product_record.get("discount_pct") or 0.0)
-    previous_savings = float(latest_product_record.get("savings_brl") or 0.0)
 
     if current_discount - previous_discount >= float(cadence_config["min_discount_improvement_points"]):
         return True
 
-    if current_savings - previous_savings >= float(cadence_config["min_savings_improvement_brl"]):
-        return True
+    # Shopee's savings may be reconstructed for display, but percentage
+    # improvement remains the only source-aware cooldown signal.
+    if not is_shopee_source_aware(deal):
+        current_savings = float(deal.get("savings_brl") or 0.0)
+        previous_savings = float(latest_product_record.get("savings_brl") or 0.0)
+        if current_savings - previous_savings >= float(
+            cadence_config["min_savings_improvement_brl"]
+        ):
+            return True
 
     sent_at = latest_product_record.get("sent_at")
     if not sent_at:

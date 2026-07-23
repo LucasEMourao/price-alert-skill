@@ -1,0 +1,12 @@
+{
+  "data": null,
+  "errors": [
+    {
+      "message": "error [10035]: access unavailable for this redacted fixture",
+      "extensions": {
+        "code": 10035,
+        "message": "access unavailable for this redacted fixture"
+      }
+    }
+  ]
+}

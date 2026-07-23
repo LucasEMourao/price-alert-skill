@@ -37,6 +37,9 @@ jobs:
       - name: Run Python test suite
         run: python -m pytest tests .agents/skills/price-alert-skill/scripts/tests
 
+      - name: Run Shopee test suite explicitly
+        run: python -m pytest .agents/skills/price-alert-skill/scripts/tests/test_shopee_*.py
+
       - name: Compile Python package
         run: python -m compileall price_alert_skill
 

@@ -1,0 +1,59 @@
+{
+  "data": {
+    "productOfferV2": {
+      "nodes": [
+        {
+          "itemId": 900000000006,
+          "commissionRate": "0.1300",
+          "sellerCommissionRate": "0.0800",
+          "shopeeCommissionRate": "0.0500",
+          "commission": "25.987",
+          "price": "219.90",
+          "sales": 55,
+          "priceMax": "299.90",
+          "priceMin": "199.90",
+          "productCatIds": [100004, 100040, 100140],
+          "ratingStar": "4.6",
+          "priceDiscountRate": 33,
+          "imageUrl": "https://cf.shopee.com.br/file/redacted-image-006",
+          "productName": "Monitor Exemplo com Preços Divergentes",
+          "shopId": 800000006,
+          "shopName": "Eletrônicos Exemplo",
+          "shopType": [1],
+          "productLink": "https://shopee.com.br/product/800000006/900000000006",
+          "offerLink": "https://shope.ee/redacted-offer-006",
+          "periodStartTime": 1700000000,
+          "periodEndTime": 32503651199
+        },
+        {
+          "itemId": 900000000009,
+          "commissionRate": "0.0500",
+          "sellerCommissionRate": "0.0300",
+          "shopeeCommissionRate": "0.0200",
+          "commission": "2.995",
+          "price": "59.90",
+          "sales": 12,
+          "priceMax": "69.90",
+          "productCatIds": [100004, 100041, 0],
+          "ratingStar": "4.3",
+          "priceDiscountRate": 14,
+          "imageUrl": "https://cf.shopee.com.br/file/redacted-image-009",
+          "productName": "Produto com Preço Mínimo Ausente",
+          "shopId": 800000009,
+          "shopName": "Loja de Exemplo",
+          "shopType": [],
+          "productLink": "https://shopee.com.br/product/800000009/900000000009",
+          "offerLink": "https://shope.ee/redacted-offer-009",
+          "periodStartTime": 1700000000,
+          "periodEndTime": 32503651199
+        }
+      ],
+      "pageInfo": {
+        "page": 1,
+        "limit": 2,
+        "hasNextPage": false,
+        "scrollId": null
+      }
+    }
+  }
+}

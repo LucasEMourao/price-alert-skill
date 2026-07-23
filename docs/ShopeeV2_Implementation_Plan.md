@@ -155,9 +155,9 @@ The normalized mapping is:
 | outbound `url` | `offerLink` | affiliate URL |
 | `current_price` | `priceMin` | primary current-price candidate |
 | `current_price` fallback | `price` | use when `priceMin` is absent |
-| `previous_price` | none documented | `None` |
+| `previous_price` | reconstructed from `priceMin`/`price` and `priceDiscountRate` | rounded reference price; marked as inferred |
 | `discount_pct` | `priceDiscountRate` | API-reported percentage, 0–100 |
-| `savings_brl` | none documented | `None` |
+| `savings_brl` | reconstructed reference minus current price | rounded display/monitoring value; not a lane threshold input |
 | `item_id` | `itemId` | raw metadata and identity input |
 | `shop_id` | `shopId` | raw metadata |
 | `shop_name` | `shopName` | raw metadata |
@@ -172,7 +172,17 @@ The normalized mapping is:
 
 `price` and `priceMin` are equal in the supplied examples. The implementation must prefer `priceMin`, fall back to `price`, and record a diagnostic if both are present but differ.
 
-The API does not expose a documented original/list price. The implementation must not use `priceMax` as a previous price and must not calculate an implied previous price from `priceDiscountRate`.
+The API does not expose a documented original/list price. The approved source-aware policy reconstructs a reference price only in the application layer:
+
+```text
+previous_price = round_half_up(current_price / (1 - priceDiscountRate / 100), 2)
+savings_brl    = previous_price - current_price
+```
+
+The deal must persist `previous_price_source=shopee_inferred_from_price_discount_rate`.
+This is a monitored inference, not an API-provided historical price. `priceMax`
+must never be used as a previous price, and inferred savings must not change the
+Shopee percentage-only lane thresholds.
 
 ### 2.6 Offer period handling
 
@@ -303,21 +313,23 @@ Shopee deals use:
 
 ```text
 current_price = priceMin or price
-previous_price = None
-savings_brl = None
+previous_price = round_half_up(current_price / (1 - priceDiscountRate / 100), 2)
+savings_brl = previous_price - current_price
+previous_price_source = shopee_inferred_from_price_discount_rate
 price_discount_source = shopee_price_discount_rate
 ```
 
-The existing pipeline requires a current/list pair and normal-lane savings. Therefore, a source-aware policy must be added without changing Amazon or Mercado Livre behavior by default.
+The inferred values are explicitly source-aware and must be monitored against
+marketplace pages. They must not change Amazon or Mercado Livre behavior.
 
-Recommended source-aware behavior:
+Approved source-aware behavior:
 
 - accept a Shopee deal when `priceDiscountRate` meets the approved source-specific threshold;
-- do not fabricate `previous_price` or `savings_brl`;
-- display the percentage and current price;
-- omit the “Antes” line;
-- use source-specific lane thresholds or an explicit fallback lane;
-- ensure ranking does not treat unknown savings as real zero-value savings without an intentional policy.
+- display the percentage, reconstructed “Antes” value, and current price;
+- retain the source marker so the value is not mistaken for an API list-price field;
+- keep source-specific percentage lane thresholds; inferred savings do not qualify a lane;
+- preserve percentage-based ranking and cooldown improvement behavior;
+- never use `priceMax` as the previous price.
 
 The exact thresholds must be approved before Sprint 3 is considered complete.
 
@@ -529,7 +541,7 @@ Potentially create a small provider-specific model or parser module if it improv
 - prefer `priceMin`, fallback to `price`;
 - record price discrepancies;
 - map `productLink` and `offerLink` separately;
-- map `priceDiscountRate` without inventing previous price;
+- map `priceDiscountRate` and leave application-layer reference-price reconstruction to the source-aware policy;
 - preserve raw commission, shop, rating, category, and period metadata;
 - skip malformed product nodes safely;
 - return structured errors.
@@ -575,7 +587,9 @@ feat(shopee): complete sprint 2 - add productOfferV2 scanner
 
 #### Objective
 
-Allow Shopee’s authoritative percentage discount to enter the existing deal flow without fabricated prices or savings.
+Allow Shopee’s authoritative percentage discount and explicitly marked
+reconstructed reference price to enter the existing deal flow without changing
+Amazon or Mercado Livre behavior.
 
 #### Files
 
@@ -590,31 +604,37 @@ Potentially modify:
 #### Behavior
 
 - preserve existing Amazon and Mercado Livre price-pair behavior;
-- allow Shopee products without `previous_price` only through an explicit source-aware path;
+- reconstruct `previous_price` with
+  `round_half_up(current_price / (1 - discount_pct / 100), 2)`;
+- persist `previous_price_source=shopee_inferred_from_price_discount_rate`;
 - preserve `discount_source=shopee_price_discount_rate`;
-- define whether normal/priority/urgent lanes use percentage-only thresholds;
-- ensure unknown savings do not silently become valid savings;
+- keep normal/priority/urgent lanes on percentage-only thresholds;
+- keep inferred savings visible for display and monitoring, but do not use them
+  as lane qualification evidence;
 - format Shopee messages as:
   - discount percentage;
+  - reconstructed “Antes” value marked with `~`;
   - current price;
-  - no fabricated “Antes” value;
   - affiliate URL;
 - maintain product and offer keys using canonical product identity and current price.
 
 #### Tests
 
-- Shopee percentage-only qualification;
-- zero discount rejection;
-- missing previous price handling;
-- lane classification;
-- ranking when savings are unknown;
-- message without an “Antes” line;
+- Shopee percentage qualification;
+- reconstructed previous price and savings with monetary rounding;
+- zero, 100%, and invalid discount rejection;
+- unmarked previous price sanitization;
+- lane classification independent of inferred savings;
+- percentage-based ranking and cooldown behavior;
+- message with the reconstructed “Antes” line;
 - unchanged Amazon and Mercado Livre formatting;
 - cooldown and offer identity behavior.
 
 #### Acceptance
 
-The source-aware policy is explicit, tested, and approved. No Shopee deal can display or persist a fabricated previous price or savings amount.
+The source-aware inference policy is explicit, tested, and approved. Every
+reconstructed Shopee reference price carries its source marker, and no
+Amazon/Mercado Livre price-pair behavior changes.
 
 #### Commit
 
@@ -853,9 +873,9 @@ The existing JSON queue format remains compatible. Queue writes must continue to
 ### Domain/application
 
 - source-aware discount qualification;
-- no fabricated previous price;
-- no fabricated savings;
-- message rendering;
+- reconstructed previous price with an explicit source marker;
+- reconstructed savings with monetary rounding;
+- message rendering and inference disclosure;
 - lane selection;
 - deduplication;
 - cooldown;
@@ -915,7 +935,7 @@ The initial integration is complete only when:
 6. `priceMin`/`price` mapping is deterministic;
 7. `priceMax` is never treated as previous price;
 8. `priceDiscountRate` is preserved as the source discount;
-9. no previous price or savings is fabricated;
+9. reconstructed Shopee prices and savings carry an explicit source marker;
 10. source-aware lane and message behavior is tested;
 11. `productLink` and `offerLink` remain separate;
 12. Shopee logic is isolated under `core/adapters/`;

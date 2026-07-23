@@ -266,13 +266,28 @@ def get_sendable_entries(
     now: datetime | str | None = None,
     product_profile: str | None = None,
     allowed_beauty_brand_names: Iterable[str] | None = None,
+    allowed_marketplaces: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return pending entries whose retry backoff has elapsed."""
+    """Return pending entries matching profile, brand, and marketplace gates."""
     now_dt = parse_iso(to_iso(now)) or utc_now()
     pool_name = POOL_KEYS[lane]
     selected_profile = (product_profile or "").strip().lower()
+    selected_marketplaces = None
+    if allowed_marketplaces is not None:
+        if isinstance(allowed_marketplaces, str):
+            values = allowed_marketplaces.split(",")
+        else:
+            values = allowed_marketplaces
+        selected_marketplaces = {
+            str(marketplace).strip().lower()
+            for marketplace in values
+            if str(marketplace).strip()
+        }
     sendable = []
     for entry in queue.get(pool_name, []):
+        entry_marketplace = str(entry.get("marketplace") or "").strip().lower()
+        if selected_marketplaces is not None and entry_marketplace not in selected_marketplaces:
+            continue
         entry_profile = (
             str(entry.get("product_profile") or DEFAULT_PRODUCT_PROFILE)
             .strip()

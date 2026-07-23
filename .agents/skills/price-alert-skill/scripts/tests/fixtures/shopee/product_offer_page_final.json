@@ -1,0 +1,37 @@
+{
+  "data": {
+    "productOfferV2": {
+      "nodes": [
+        {
+          "itemId": 900000000005,
+          "commissionRate": "0.1100",
+          "sellerCommissionRate": "0.0700",
+          "shopeeCommissionRate": "0.0400",
+          "commission": "8.789",
+          "price": "79.90",
+          "sales": 22,
+          "priceMax": "99.90",
+          "priceMin": "79.90",
+          "productCatIds": [100003, 100030, 0],
+          "ratingStar": "4.0",
+          "priceDiscountRate": 20,
+          "imageUrl": "https://cf.shopee.com.br/file/redacted-image-005",
+          "productName": "Cabo USB Exemplo",
+          "shopId": 800000005,
+          "shopName": "Acessórios Exemplo",
+          "shopType": [2],
+          "productLink": "https://shopee.com.br/product/800000005/900000000005",
+          "offerLink": "https://shope.ee/redacted-offer-005",
+          "periodStartTime": 1700000000,
+          "periodEndTime": 32503651199
+        }
+      ],
+      "pageInfo": {
+        "page": 3,
+        "limit": 2,
+        "hasNextPage": false,
+        "scrollId": null
+      }
+    }
+  }
+}

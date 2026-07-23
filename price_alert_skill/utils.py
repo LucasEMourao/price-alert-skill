@@ -23,6 +23,11 @@ from price_alert_skill.core.domain.dedup_policy import (
     normalize_sent_deals_data as domain_normalize_sent_deals_data,
     normalize_sent_record as domain_normalize_sent_record,
 )
+from price_alert_skill.core.domain.lane_rules import (
+    get_authoritative_discount_pct,
+    is_shopee_source_aware,
+)
+from price_alert_skill.core.domain.pricing import SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE
 from price_alert_skill.deal_selection import CADENCE_CONFIG
 from price_alert_skill.paths import resolve_data_dir
 
@@ -170,7 +175,22 @@ def format_deal_message(deal: dict[str, Any]) -> str:
         f"{category_emoji} {title}",
     ]
 
-    if previous_price and discount_pct:
+    if is_shopee_source_aware(deal):
+        # The inferred reference price is an explicit source-aware policy,
+        # not a provider field.  Display it only with its source marker.
+        authoritative_discount = get_authoritative_discount_pct(deal)
+        inferred_previous_price = (
+            deal.get("previous_price")
+            if deal.get("previous_price_source") == SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE
+            else None
+        )
+        lines.append("")
+        if authoritative_discount is not None:
+            lines.append(f"🔥 {int(round(authoritative_discount))}% OFF")
+        if inferred_previous_price:
+            lines.append(f"💰 Antes: ~{format_price_brl(inferred_previous_price)}~")
+        lines.append(f"🎯 Hoje: {price_today}")
+    elif previous_price and discount_pct:
         price_was = format_price_brl(previous_price)
         discount_int = int(round(discount_pct))
         lines.extend([

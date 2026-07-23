@@ -312,3 +312,69 @@ Criterios de aceite antes do merge:
 - `sent_deals.json` registra cooldown corretamente.
 - Nao ha duplicidade em fluxo real.
 - O consumo de RAM cai em relacao ao baseline do sender Playwright (~1.4 GiB RSS).
+
+## Shopee V2 - Sprint 5 e rollout controlado
+
+Os sprints 0 a 4 da integracao Shopee estao na branch `feat/shopee-v2-api`.
+O Sprint 5 cobre apenas observabilidade, CI, documentacao e validacao
+operacional; ele nao altera o gateway WhatsApp.
+
+### Configuracao
+
+A Shopee permanece opt-in:
+
+- `SHOPEE_ENABLED=0` e a chave geral de desligamento;
+- `PRICE_ALERT_MARKETPLACES` precisa conter `shopee_br` para escanear;
+- `PRICE_ALERT_SEND_MARKETPLACES`, quando preenchida, bloqueia o envio de
+  marketplaces que nao estejam na allowlist;
+- o valor vazio da allowlist de envio preserva o comportamento existente;
+- App ID e App Secret ficam somente no `.env` do servidor.
+
+A operacao inicial usa `productOfferV2`, `priceMin` (fallback `price`),
+`priceDiscountRate`, `productLink` como identidade e `offerLink` como URL de
+saida. Como a API nao fornece o preco de lista, a aplicacao agora reconstrói
+um preco de referencia Shopee com arredondamento monetario:
+
+```text
+preco_referencia = round_half_up(preco_atual / (1 - desconto / 100), 2)
+economia         = preco_referencia - preco_atual
+```
+
+O campo `previous_price_source` marca essa origem como
+`shopee_inferred_from_price_discount_rate`. `priceMax` continua sendo apenas
+metadado de variacao e nunca e usado como preco anterior. Os valores devem ser
+comparados com a pagina do marketplace durante o monitoramento.
+
+### Observabilidade
+
+O resumo por consulta registra:
+
+```text
+Shopee summary: requests=N, pages=N, products=N, deals=N, errors=N
+```
+
+`requests` conta as requisicoes reportadas (com fallback de uma por pagina),
+`pages` as paginas recebidas, `products` os produtos normalizados, `deals` os
+produtos aprovados pelas regras e `errors` as falhas estruturadas. Erros de
+API/GraphQL sao redigidos antes do log; Authorization, assinatura, segredo e
+payload assinado nunca podem aparecer em logs ou artefatos.
+
+### Validacao e rollback
+
+A validacao local e baseada em fixtures e nao faz chamada live. Um canary live
+so pode ser executado com autorizacao explicita, credencial nao produtiva e
+`SHOPEE_MAX_PAGES_PER_QUERY=1`. O primeiro comando deve usar
+`--max-results 1 --min-discount 999 --scan-only`, sem `--send-whatsapp`.
+Depois, inspecione produto normalizado, fila, JSON de mensagem, identidade
+canonica, fonte do desconto e URL afiliada antes de qualquer envio.
+
+Para rollback, defina `SHOPEE_ENABLED=0`, remova `shopee_br` de
+`PRICE_ALERT_MARKETPLACES` e reinicie os supervisores. Para manter ofertas
+Shopee ja enfileiradas pendentes, defina temporariamente
+`PRICE_ALERT_SEND_MARKETPLACES=amazon_br,mercadolivre_br`. Nao edite a fila ou o
+historico manualmente. O allowlist vazio so deve ser restaurado apos uma nova
+validacao controlada.
+
+O canary live permanece pendente quando nao houver autorizacao para chamadas
+externas; isso deve ser registrado como risco de rollout, e nao mascarado como
+um teste concluido.

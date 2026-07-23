@@ -196,12 +196,14 @@ def get_sendable_entries(
     now: datetime | str | None = None,
     product_profile: str | None = None,
     allowed_beauty_brand_names: Iterable[str] | None = None,
+    allowed_marketplaces: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return pending entries whose retry backoff has elapsed."""
+    """Return pending entries that pass the configured sender filters."""
     return _QUEUE_REPOSITORY.get_sendable_entries(
         queue,
         lane,
         now=now,
         product_profile=product_profile,
         allowed_beauty_brand_names=allowed_beauty_brand_names,
+        allowed_marketplaces=allowed_marketplaces,
     )
