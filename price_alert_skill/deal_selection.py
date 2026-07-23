@@ -37,6 +37,10 @@ from price_alert_skill.core.domain.ranking import (
     is_better_deal,
     sort_deals_for_sending,
 )
+from price_alert_skill.core.domain.pricing import (
+    SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE,
+    calculate_inferred_savings,
+)
 
 
 CADENCE_CONFIG = {
@@ -391,12 +395,20 @@ def prepare_deal_for_selection(
     )
 
     if is_shopee_source_aware(prepared):
-        # Shopee's percentage is authoritative.  Its API does not document a
-        # list price, so keep both previous price and absolute savings unknown.
+        # Shopee's percentage is authoritative.  When the application has
+        # explicitly reconstructed a reference price from that percentage,
+        # preserve it with its source marker; never trust an unmarked value.
         prepared["discount_pct"] = get_authoritative_discount_pct(prepared)
-        prepared["previous_price"] = None
-        prepared["previous_price_text"] = None
-        prepared["savings_brl"] = None
+        if prepared.get("previous_price_source") == SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE:
+            prepared["savings_brl"] = calculate_inferred_savings(
+                current_price,
+                prepared.get("previous_price"),
+            )
+        else:
+            prepared["previous_price"] = None
+            prepared["previous_price_text"] = None
+            prepared["previous_price_source"] = None
+            prepared["savings_brl"] = None
         # A changed current price is a distinct Shopee offer, while the
         # canonical product identity remains stable for cooldown decisions.
         prepared["dedup_key"] = prepared["offer_key"]

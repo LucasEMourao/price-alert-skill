@@ -92,6 +92,20 @@ Shopee V2 is an opt-in provider. The initial integration uses only the official
 from `offerLink` (affiliate outbound URL). It does not use feed ingestion or
 short-link generation.
 
+The API supplies the current price and an authoritative percentage, but not a
+list-price field. The application therefore uses an explicit Shopee-only
+reference-price policy for display:
+
+```text
+reference_price = round_half_up(current_price / (1 - discount_pct / 100), 2)
+savings_brl     = reference_price - current_price
+```
+
+The derived value is marked as
+`shopee_inferred_from_price_discount_rate`; `priceMax` is never used as an old
+price. The `~` marker in the message indicates that this is a reconstructed
+reference price and should be monitored against the marketplace page.
+
 Enable it only in a controlled environment with dedicated non-production
 credentials:
 
@@ -131,12 +145,18 @@ The counters mean:
 - `pages`: pages received and recorded from `pageInfo`;
 - `products`: normalized products returned by the provider adapter;
 - `deals`: products that passed the source-aware percentage and lane rules;
+- `previous_price_source`: when present, identifies the reconstructed Shopee
+  reference price rather than an API-provided list-price field;
 - `errors`: structured provider/normalization errors returned by the adapter.
 
 Shopee API and GraphQL failures are redacted before they reach operational
 logs. Authorization values, signatures, App Secrets, and credential-shaped
 values must never be printed or persisted. HTTP 200 responses containing a
 GraphQL `errors` array are failures, not successful provider results.
+
+The reconstructed price is persisted with its source marker for later
+comparison. It must not be interpreted as a Shopee API field or used to claim
+more accuracy than the reported percentage supports.
 
 ### Controlled canary procedure
 

@@ -332,8 +332,18 @@ A Shopee permanece opt-in:
 
 A operacao inicial usa `productOfferV2`, `priceMin` (fallback `price`),
 `priceDiscountRate`, `productLink` como identidade e `offerLink` como URL de
-saida. Nao se deve usar `priceMax` como preco anterior nem criar economia
-inferida.
+saida. Como a API nao fornece o preco de lista, a aplicacao agora reconstrói
+um preco de referencia Shopee com arredondamento monetario:
+
+```text
+preco_referencia = round_half_up(preco_atual / (1 - desconto / 100), 2)
+economia         = preco_referencia - preco_atual
+```
+
+O campo `previous_price_source` marca essa origem como
+`shopee_inferred_from_price_discount_rate`. `priceMax` continua sendo apenas
+metadado de variacao e nunca e usado como preco anterior. Os valores devem ser
+comparados com a pagina do marketplace durante o monitoramento.
 
 ### Observabilidade
 

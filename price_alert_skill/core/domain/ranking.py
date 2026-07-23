@@ -14,10 +14,10 @@ from .lane_rules import (
 def deal_sort_key(deal: dict[str, Any]) -> tuple[Any, ...]:
     """Build a stable ranking key for deals inside the same lane.
 
-    Shopee has no trustworthy absolute savings value.  Its percentage is
-    therefore ranked directly, and percentage-only deals are kept after deals
-    with known savings when mixed in one lane.  This is explicit policy, not a
-    conversion of unknown savings into a commercial zero.
+    Shopee's reference savings may be reconstructed for display, but its
+    provider percentage remains the authoritative ranking signal. Shopee deals
+    are kept after deals with provider-known savings when mixed in one lane.
+    This prevents an inference from changing cross-provider ranking.
     """
     price = float(deal.get("current_price") or 0.0)
     title = str(deal.get("title", "")).lower()

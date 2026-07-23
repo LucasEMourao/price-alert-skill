@@ -17,8 +17,8 @@ LANE_PRIORITY = {
 }
 
 # Shopee exposes an authoritative percentage but no documented list price.
-# These thresholds intentionally use only that percentage; savings are never
-# inferred or treated as zero to make a Shopee deal qualify.
+# The application may reconstruct a reference price for display, but these
+# thresholds intentionally use only the provider percentage to qualify lanes.
 SHOPEE_MARKETPLACE = "shopee_br"
 SHOPEE_DISCOUNT_SOURCE = "shopee_price_discount_rate"
 SHOPEE_LANE_THRESHOLDS = {

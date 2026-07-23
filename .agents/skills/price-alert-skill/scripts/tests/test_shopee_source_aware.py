@@ -9,6 +9,10 @@ from price_alert_skill.core.domain.lane_rules import (
     SHOPEE_LANE_THRESHOLDS,
     classify_deal_lane,
 )
+from price_alert_skill.core.domain.pricing import (
+    SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE,
+    reconstruct_shopee_previous_price,
+)
 from price_alert_skill.core.domain.ranking import sort_deals_for_sending
 from price_alert_skill.deal_selection import prepare_deal_for_selection
 from price_alert_skill.utils import calculate_discount, format_deal_message
@@ -59,8 +63,9 @@ def test_shopee_qualification_uses_price_discount_rate_only():
 
     assert len(deals) == 1
     assert deals[0]["discount_pct"] == 20.0
-    assert deals[0]["previous_price"] is None
-    assert deals[0]["savings_brl"] is None
+    assert deals[0]["previous_price"] == 125.0
+    assert deals[0]["savings_brl"] == 25.0
+    assert deals[0]["previous_price_source"] == SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE
 
 
 def test_shopee_zero_or_missing_source_discount_is_not_qualified():
@@ -99,26 +104,46 @@ def test_shopee_lane_thresholds_are_explicit_and_ignore_unknown_savings():
         (40.0, "urgent"),
     ):
         deal = _shopee_deal(price_discount_rate=discount, savings_brl=99999.0)
-        assert deal["savings_brl"] is None
+        assert deal["previous_price"] is not None
+        assert deal["savings_brl"] is not None
         assert classify_deal_lane(deal) == expected_lane
 
 
-def test_shopee_prepare_sanitizes_previous_price_and_savings():
+def test_shopee_reconstructs_previous_price_and_savings_from_discount_rate():
+    deal = _shopee_deal(
+        current_price=163.71,
+        price_discount_rate=10.0,
+    )
+
+    assert deal["previous_price"] == 181.90
+    assert deal["savings_brl"] == 18.19
+    assert deal["previous_price_source"] == SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE
+    assert deal["discount_source"] == SHOPEE_SOURCE
+
+
+def test_shopee_reconstruction_rejects_invalid_discount_values():
+    assert reconstruct_shopee_previous_price(100.0, 0.0) is None
+    assert reconstruct_shopee_previous_price(100.0, 100.0) is None
+    assert reconstruct_shopee_previous_price(100.0, "invalid") is None
+    assert reconstruct_shopee_previous_price(100.0, True) is None
+
+
+def test_shopee_prepare_sanitizes_unmarked_previous_price():
     deal = _shopee_deal(previous_price=999.0, savings_brl=899.0)
 
-    assert deal["previous_price"] is None
-    assert deal["previous_price_text"] is None
-    assert deal["savings_brl"] is None
+    assert deal["previous_price"] == 142.86
+    assert deal["savings_brl"] == 42.86
+    assert deal["previous_price_source"] == SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE
     assert deal["discount_pct"] == 30.0
     assert deal["discount_source"] == SHOPEE_SOURCE
 
 
-def test_shopee_message_shows_percentage_and_current_price_without_antes():
+def test_shopee_message_shows_inferred_previous_and_current_prices():
     message = format_deal_message(_shopee_deal(price_discount_rate=30))
 
     assert "🔥 30% OFF" in message
+    assert "💰 Antes: ~R$ 142,86~" in message
     assert "🎯 Hoje: R$ 100,00" in message
-    assert "Antes:" not in message
     assert "R$ 999,00" not in message
     assert "https://shopee.ee/affiliate-offer" in message
 

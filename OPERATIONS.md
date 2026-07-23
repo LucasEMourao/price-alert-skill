@@ -105,8 +105,19 @@ Interpret the counters as follows:
   normalization errors.
 
 `productLink` is the canonical identity URL. `offerLink` is the outbound
-affiliate URL. Check both when diagnosing a queue entry. A `priceMax` value is
-metadata only and must never appear as a fabricated previous price.
+affiliate URL. Check both when diagnosing a queue entry. Since
+`productOfferV2` does not provide a documented list price, the application
+reconstructs a Shopee reference price as:
+
+```text
+round_half_up(current_price / (1 - priceDiscountRate / 100), 2)
+```
+
+The resulting savings and `previous_price_source=
+shopee_inferred_from_price_discount_rate` are for transparent display and
+monitoring. `priceMax` remains variation metadata and must never be used as
+the previous price. Compare the displayed reference against the marketplace
+page during the monitoring period.
 
 Shopee API errors are redacted before logging. In particular, logs must not
 contain an Authorization header, signature, App Secret, or raw signed payload.

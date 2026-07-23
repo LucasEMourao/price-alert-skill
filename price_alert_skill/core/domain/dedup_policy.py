@@ -186,9 +186,8 @@ def can_send_again(
     if current_discount - previous_discount >= float(cadence_config["min_discount_improvement_points"]):
         return True
 
-    # Shopee has no documented absolute savings.  Do not turn ``None`` into a
-    # numeric zero for cooldown improvements; percentage improvement is the
-    # only source-aware improvement signal.
+    # Shopee's savings may be reconstructed for display, but percentage
+    # improvement remains the only source-aware cooldown signal.
     if not is_shopee_source_aware(deal):
         current_savings = float(deal.get("savings_brl") or 0.0)
         previous_savings = float(latest_product_record.get("savings_brl") or 0.0)

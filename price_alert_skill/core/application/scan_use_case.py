@@ -13,6 +13,11 @@ from price_alert_skill.core.domain.lane_rules import (
     get_authoritative_discount_pct,
     is_shopee_source_aware,
 )
+from price_alert_skill.core.domain.pricing import (
+    SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE,
+    calculate_inferred_savings,
+    reconstruct_shopee_previous_price,
+)
 
 
 AMAZON_VERIFIED_LIST_PRICE_SOURCES = {"amazon_list_price"}
@@ -56,6 +61,14 @@ def _extract_shopee_deal(
         if product.get("discount_source") == SHOPEE_DISCOUNT_SOURCE
         else product.get("price_discount_source")
     )
+    inferred_previous_price = reconstruct_shopee_previous_price(
+        current_price,
+        discount_pct,
+    )
+    inferred_savings = calculate_inferred_savings(
+        current_price,
+        inferred_previous_price,
+    )
     return {
         "title": title,
         "url": outbound_url,
@@ -67,13 +80,18 @@ def _extract_shopee_deal(
         "marketplace": SHOPEE_MARKETPLACE,
         "current_price": current_price,
         "current_price_text": product.get("price_text"),
-        "previous_price": None,
+        "previous_price": inferred_previous_price,
         "previous_price_text": None,
+        "previous_price_source": (
+            SHOPEE_INFERRED_PREVIOUS_PRICE_SOURCE
+            if inferred_previous_price is not None
+            else None
+        ),
         "discount_pct": discount_pct,
         "price_discount_rate": discount_pct,
         "discount_source": discount_source,
         "price_discount_source": discount_source,
-        "savings_brl": None,
+        "savings_brl": inferred_savings,
         "query": query,
         "source_query": query,
     }
@@ -119,7 +137,7 @@ def extract_deals_from_products(
             if shopee_deal is not None:
                 deals.append(shopee_deal)
             # A Shopee product must use the explicit priceDiscountRate path;
-            # never fall through to list-price or inferred-savings logic.
+            # never fall through to generic marketplace list-price logic.
             continue
 
         current_price = product.get("price")
@@ -316,6 +334,8 @@ def build_messages_payload(
                 "marketplace": deal["marketplace"],
                 "current_price": deal["current_price"],
                 "discount_pct": deal["discount_pct"],
+                "previous_price": deal.get("previous_price"),
+                "previous_price_source": deal.get("previous_price_source"),
                 "url": deal["url"],
                 "image_url": deal.get("image_url"),
                 "message": message,
